@@ -3,7 +3,7 @@
 include_once dirname(__file__).'/Tplus.php';
 
 class Tpl {	
-	private static function config() {
+	protected static function config() {
 		return [
 			/**
 				(1/4) template directory 

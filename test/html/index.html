@@ -6,10 +6,11 @@
 	</style>
 </head>
 <body>
+
+
 <table>
 
 
-	
 <tr>
 	<th>
 		문서 항목 번호
@@ -451,7 +452,15 @@
 [\=GLOBALS.me]:  [=GLOBALS.me] 
 <br/>
 <br/>
-	
+
+[:CSS]
+[? isset(view)]
+<p>[=view.seq]</p>
+[:]
+<p>isset() empty()</p>
+[/]
+
+
 
 </body>
 </html>

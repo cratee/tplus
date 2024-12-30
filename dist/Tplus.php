@@ -3,6 +3,7 @@
 class Tplus {
     
     const SCRIPT_SIZE_PAD = 9;
+    const VERSION = '1.0.4';
 
     private $config;
     private $vals=[];
@@ -105,7 +106,7 @@ class Tplus {
     }
     private function scriptHeader($htmlPath) {
 		$fileMTime = @date('Y-m-d H:i:s', filemtime($htmlPath));
-		return '<?php /* Tplus 1.0.3 '.$fileMTime.' '.realpath($htmlPath).' ';
+		return '<?php /* Tplus '.self::VERSION.' '.$fileMTime.' '.realpath($htmlPath).' ';
     }
 }
 

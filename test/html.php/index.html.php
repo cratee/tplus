@@ -1,4 +1,4 @@
-<?php /* Tplus 1.0.3 2023-03-31 23:58:50 D:\Work\Tplus\test\html\index.html 000007840 */ ?>
+<?php /* Tplus 1.0.4 2024-12-31 05:22:58 D:\Work\Tplus\test\html\index.html 000008260 */ ?>
 <html>
 <head>
     <title>welcome!</title>
@@ -7,10 +7,11 @@
 	</style>
 </head>
 <body>
+
+
 <table>
 
 
-	
 <tr>
 	<th>
 		문서 항목 번호
@@ -441,7 +442,22 @@
 [=GLOBALS.me]:  <?= $GLOBALS["me"] ?> 
 <br/>
 <br/>
-	
+
+<p>wrapper concat()</p>
+<?= get_html($V["path"]['upload'].'하위경로','파일.php') ?>
+<?= get_html(\TplValWrapper::_o($V["path"]["upload"])->concat('하위경로'),'파일.php') ?>
+<?= get_html(\TplValWrapper::_o($V["path"]['upload'])->concat('하위경로2'),'파일.php') ?>
+<br/>
+<br/>
+
+[:CSS]
+<?php if (isset($V["view"])) { ?>
+<p><?= $V["view"]["seq"] ?></p>
+<?php } else { ?>
+<p>isset() empty()</p>
+<?php } ?>
+
+
 
 </body>
 </html>

@@ -1,8 +1,8 @@
 <?php
 /**
     ------------------------------------------------------------------------------
-    Tplus 1.0.3 
-    Released 2023-03-31
+    Tplus 1.0.4 
+    Released 2024-12-31
 
     
     The MIT License (MIT)
@@ -51,13 +51,13 @@ class Scripter {
             self::saveScript($config['HtmlScriptRoot'], $scriptPath, $sizePad, $header, self::parse()); 
         } catch(SyntaxError $e) {
             if ($test) {
-                throw new \ErrorException($e->getMessage(), 0, E_PARSE, realpath($htmlPath), $currentLine);                
+                throw new \ErrorException($e->getMessage(), 0, E_PARSE, realpath($htmlPath), self::$currentLine);                
             }
             self::reportError('Tplus Syntax Error: ', $e->getMessage(), $htmlPath, self::$currentLine);
         } catch(FatalError $e) {
             //@todo remove duplication
             if ($test) {
-                throw new \ErrorException($e->getMessage(), 0, E_PARSE, realpath($htmlPath), $currentLine);                
+                throw new \ErrorException($e->getMessage(), 0, E_PARSE, realpath($htmlPath), self::$currentLine);                
             }
             self::reportError('Tplus Scripter Fatal Error: ', $e->getMessage(), $htmlPath, self::$currentLine);
         }
@@ -72,7 +72,7 @@ class Scripter {
         if (!is_readable($scriptRoot)) {
             throw new FatalError('script root '.$scriptRoot.' is not readable. check read-permission of web server.');
         }
-        if (!is_writable($scriptRoot)) {
+        if (substr(__FILE__,0,1)==='/' and !is_writable($scriptRoot)) {
             throw new FatalError('script root '.$scriptRoot.' is not writable. check write-permission of web server.');
         }
 
@@ -87,7 +87,7 @@ class Scripter {
             $path .= '/'.$dir;
             if (!is_dir($path)) {
                 if (!mkdir($path, $filePerms)) {
-                    throw new FatalError('fail to create directory '.$path.' check permission or unknown problem.');
+                    throw new FatalError('fail to create directory '.$path.' check the write-permission.');
                 }
             }
         }
@@ -145,6 +145,14 @@ class Scripter {
 
         $resultScript='';
         while (self::$userCode) {
+            /*$pattern =
+            '~
+                (.*?)
+                (<!--\s*)?
+                (\[)
+                (\\\\*)
+                ([=@?:/*])
+            ~xs';*/
             [$parsedUserCode, $userCodeBeforeTag, $htmlLeftCmnt, $leftTag, $escape, $command]
                 = self::findLeftTagAndCommand(self::$userCode);
         
@@ -164,8 +172,13 @@ class Scripter {
                 self::decreaseUserCode($comment);
 
             } else {
-                $resultScript .= Statement::script($command);
-
+                $statement = Statement::script($command);
+                if (false === $statement) {
+                    // [:] out of [@] or [?]
+                    $resultScript .= $htmlLeftCmnt.$leftTag./*$escape.*/$command;
+                } else {
+                    $resultScript .= $statement;
+                }
             }            
         }
         return $resultScript;
@@ -314,8 +327,11 @@ class Statement {
             case '?': $script = self::parseBranch();    break;
             case ':':
                 $prevCommand = self::$commandStack->peek();
-                if (!$prevCommand or in_array($prevCommand, [':', '@:', '$:'])) {  
-                    // @if $prevCommand is empty or in [else, loop else, default],                    
+                if (!$prevCommand) {
+                    return false;
+                }
+                if (/*!$prevCommand or*/ in_array($prevCommand, [':', '@:', '$:'])) {  
+                    // @if $prevCommand in [else, loop else, default],                    
                     throw new SyntaxError("Unexpected ':' command");
                 }
                 switch($prevCommand[0]) {                    
@@ -1113,7 +1129,7 @@ class NameDot {
             if (self::isConstantName($func_name)) { //@
                 throw new SyntaxError($func_name.'() has constant name.');
             }
-            if (!function_exists($func_name)) {
+            if (!function_exists($func_name) and !in_array($func_name,['isset','empty'])) {
                 throw new SyntaxError('function '.$func_name.'() is not defined.');
             }
             self::initChain();

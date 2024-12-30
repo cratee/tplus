@@ -3,7 +3,11 @@ include '../dist/Tpl-dist.php';
 const MY_CONST = 111;
 const MY_CONST_ARRAY= ['a'=>1, 'b'=> 2, 'c'=>3];
 
+//echo function_exists('count');
+//echo function_exists('isset');
+
 $me = 'I\'m global';
+
 
 $country = [
 	[
@@ -79,7 +83,17 @@ include 'hello.nsWidget.php';
 
 $sub = Tpl::get('sub.html', ['fooo'=>[8,9,10,11,12,13]]);
 
+$var = [
+	'header-title' => 'this is header file',
+ ];
+
+$path=[
+	'upload'=>'/upload',
+];
+
 $vals = [
+	'path' => $path,
+	'var' => $var,
 	'content' => 'hello world',
 	'a' => 10,
 	'b' => 20,
