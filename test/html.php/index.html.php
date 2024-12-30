@@ -1,4 +1,4 @@
-<?php /* Tplus 1.0.4 2024-12-31 05:22:58 D:\Work\Tplus\test\html\index.html 000008260 */ ?>
+<?php /* Tplus 1.0.4 2024-12-31 05:25:09 D:\Work\Tplus\test\html\index.html 000007966 */ ?>
 <html>
 <head>
     <title>welcome!</title>
@@ -440,13 +440,6 @@
 <br/>
 <br/>
 [=GLOBALS.me]:  <?= $GLOBALS["me"] ?> 
-<br/>
-<br/>
-
-<p>wrapper concat()</p>
-<?= get_html($V["path"]['upload'].'하위경로','파일.php') ?>
-<?= get_html(\TplValWrapper::_o($V["path"]["upload"])->concat('하위경로'),'파일.php') ?>
-<?= get_html(\TplValWrapper::_o($V["path"]['upload'])->concat('하위경로2'),'파일.php') ?>
 <br/>
 <br/>
 
