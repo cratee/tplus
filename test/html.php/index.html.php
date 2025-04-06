@@ -1,4 +1,4 @@
-<?php /* Tplus 1.0.4 2024-12-31 05:25:09 D:\Work\Tplus\test\html\index.html 000007966 */ ?>
+<?php /* Tplus 1.0.4 2025-02-14 15:50:11 D:\Work\Tplus\test\html\index.html 000007916 */ ?>
 <html>
 <head>
     <title>welcome!</title>
@@ -10,6 +10,8 @@
 
 
 <table>
+
+
 
 
 <tr>
@@ -345,16 +347,6 @@
 </tr>
 
 <tr>
-	<td></td>
-	<td>
-		
-	</td>
-	<td>
-
-	</td>
-</tr>
-
-<tr>
 	<td>20</td>
 	<td>
 	<?php $L1=[];if (is_array($L1) and !empty($L1)) {$L1s=count($L1);$L1i=-1;foreach($L1 as $L1k=>$L1v) { ++$L1i; ?>
@@ -433,7 +425,6 @@
 </tr>
 </table>
 
-
 <br/>
 <br/>
 [=SERVER.PHP_SELF]:  <?= $_SERVER["PHP_SELF"] ?> 
@@ -443,13 +434,12 @@
 <br/>
 <br/>
 
-[:CSS]
+[:CSS][/]
 <?php if (isset($V["view"])) { ?>
 <p><?= $V["view"]["seq"] ?></p>
 <?php } else { ?>
 <p>isset() empty()</p>
 <?php } ?>
-
 
 
 </body>

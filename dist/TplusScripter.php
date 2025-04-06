@@ -35,7 +35,7 @@ class Scripter {
     
     private static $currentLine = 1;
 
-    public static $valWrapper;
+    public static $wrapper;
     public static $loopHelper;
     public static $userCode;
 
@@ -146,17 +146,17 @@ class Scripter {
         $resultScript='';
         while (self::$userCode) {
             /*$pattern =
-            '~
-                (.*?)
+            '~              // $parsedUserCode ($matches[0])
+                (.*?)       // $betweenTags
                 (<!--\s*)?
                 (\[)
                 (\\\\*)
                 ([=@?:/*])
             ~xs';*/
-            [$parsedUserCode, $userCodeBeforeTag, $htmlLeftCmnt, $leftTag, $escape, $command]
+            [$parsedUserCode, $betweenTags, $htmlLeftCmnt, $leftTag, $escape, $command]
                 = self::findLeftTagAndCommand(self::$userCode);
         
-            $resultScript .= $userCodeBeforeTag;
+            $resultScript .= $betweenTags;
 
             self::decreaseUserCode($parsedUserCode);
 
@@ -181,6 +181,17 @@ class Scripter {
                 }
             }            
         }
+
+        for ($commandStack = Statement::commandStack();; ) {
+            $command = $commandStack->pop();
+            if (!$command or in_array($command, ['@', '?'])) {
+                break;
+            }
+        }
+        if ($command) {
+            throw new SyntaxError('['.$command.'...] is not closed by [/]');
+        }
+
         return $resultScript;
     }
 
@@ -259,10 +270,11 @@ class Scripter {
     }
 }
 
-class SyntaxError extends \Exception {
+class SyntaxError extends \Exception {}
 
-}
 class FatalError extends \Exception {}
+
+class EmptyExpression extends \Exception {}
 
 
 
@@ -298,12 +310,8 @@ class Statement {
             ?   (if)
             :   (else)
             @   (loop)
-
-        // following are not user command.
-            $   (switch)
-            $:  (default)  
             @:  (loop else)
-        // (case) and (else if) not needed.
+        //  (else if) not needed for syntax check
     */
     private static $commandStack;
 
@@ -322,27 +330,32 @@ class Statement {
             return self::parseEcho();
         }
         switch($command) {
-            case '/': $script = self::parseEnd();       break;
             case '@': $script = self::parseLoop();      break;
             case '?': $script = self::parseBranch();    break;
+            case '/': 
+                if (!self::$commandStack->peek()) {
+                    return false;
+                }
+                $script = self::parseEnd();             break;
             case ':':
                 $prevCommand = self::$commandStack->peek();
                 if (!$prevCommand) {
                     return false;
                 }
-                if (/*!$prevCommand or*/ in_array($prevCommand, [':', '@:', '$:'])) {  
-                    // @if $prevCommand in [else, loop else, default],                    
+                if (in_array($prevCommand, [':', '@:'])) {     
                     throw new SyntaxError("Unexpected ':' command");
                 }
                 switch($prevCommand[0]) {                    
                     case '?': $script = self::parseElse();      break;
-                    case '$': $script = self::parseCase();      break;
                     case '@': $script = self::parseLoopElse();  break;
                 }
         }
 
         self::parseRightTag();
         return '<?php '.$script.' ?>';
+    }
+    public static function commandStack() {
+        return self::$commandStack;
     }
 
     private static function parseEcho() {
@@ -352,12 +365,12 @@ class Statement {
     }
 
     private static function parseEnd() {
-        if (self::$commandStack->isEmpty()) {
+        /*if (self::$commandStack->isEmpty()) {
             throw new SyntaxError('Unexpected end tag [/]');
-        }
+        }*/
         $script = ('@' === self::$commandStack->peek()) ? '}}' : '}';
-        while(!in_array(self::$commandStack->pop(), ['@', '?', '$']));
-
+        //while(!in_array(self::$commandStack->pop(), ['@', '?', '$']));
+        while(!in_array(self::$commandStack->pop(), ['@', '?']));
         return $script;
     }
     private static function parseRightTag() {
@@ -392,38 +405,14 @@ class Statement {
     }
 
     private static function parseBranch() {
-        $expressionScript = Expression::script(true);
-        if (self::caseExists()) {
-            $statementScript = 'switch ('.$expressionScript.') { ';
-            self::$commandStack->push('$');
-            do {
-                $statementScript .= 'case '.Expression::script(true).': ';
-            } while (self::caseExists());
-
-        } else {
-            self::$commandStack->push('?');
-            $statementScript = 'if ('.$expressionScript.') {';
-        }
+        $expressionScript = Expression::script();
+        self::$commandStack->push('?');
+        $statementScript = 'if ('.$expressionScript.') {';
 
         return $statementScript; 
     }
-    private static function parseCase() {
-        if (self::expressionExists()) {
-            $statementScript = 'break; ';
-            do {
-                $statementScript .= 'case '.Expression::script(true).': ';
-            } while (self::caseExists());
-            return $statementScript;
 
-        } else {
-            self::$commandStack->push('$:');
-            return 'break; default:';
-        }
-    }
 
-    private static function caseExists() {
-        return preg_match('/^\s*\:/', Scripter::$userCode);
-    }
     private static function expressionExists() {
         return !preg_match('/^\s*\]/', Scripter::$userCode);
     }
@@ -457,12 +446,12 @@ class Statement {
     }
 }
 
-class Token { // DOT|OPERAND|OPERATOR|O_OPERATOR|OPEN|CLOSE|UNARY|BI_UNARY
+class Token { // DOT|OPERAND|OPERATOR|DELIMITER|OPEN|CLOSE|UNARY|BI_UNARY
     const SPACE     = 0;
     const DOT       = 1;
     const OPERAND   = 2;
     const OPERATOR  = 4;
-    const O_OPERATOR= 8;
+    const DELIMITER = 8;
     const OPEN      = 16;
     const CLOSE     = 32;
     const UNARY     = 64;
@@ -482,12 +471,12 @@ class Token { // DOT|OPERAND|OPERATOR|O_OPERATOR|OPEN|CLOSE|UNARY|BI_UNARY
         ],
         self::OPERATOR => [
             'Xcrement'  => '\+\+|--',
-            'Comparison'=> '===?|!==?|<=?|>=?',       // check a == b == c
+            'Comparison'=> '===?|!==?|<=?|>=?',       //@todo check a == b == c
             'Logic'     => '&&|\|\|',                   
             'Elvis'     => '\?:|\?\?',
-            'ArithOrBit'=> '[%*/&|\^]|<<|>>',           // check quoted
+            'ArithOrBit'=> '[%*/&|\^]|<<|>>',         //@todo check quoted
         ],
-        self::O_OPERATOR => [
+        self::DELIMITER => [           // to create new expression
             'TernaryIf' => '\?',                        
             'TernaryElseOrKVDelim'=>':',                 
             'Comma'     => ',',
@@ -513,16 +502,6 @@ class Token { // DOT|OPERAND|OPERATOR|O_OPERATOR|OPEN|CLOSE|UNARY|BI_UNARY
 }
 
 
-/*class Opener {
-    const FUNC  = 1;    //  func(
-    const PAR   = 2;    //  (
-    const IDXB  = 4;    //  arr{
-    const IDXC  = 8;    //  arr[
-    const JSNB  = 16;   //  {
-    const JSNC  = 32;   //  [
-    const T_IF  = 64;   //  ?
-}*/
-
 class Expression {
 
     /**
@@ -533,25 +512,25 @@ class Expression {
        in case of colon(:) and comma(,), opener remains as ? or {[
      */
     private $opener = '';
-    private $scriptedTokens = [];
+    private $scriptPieces = [];
     private $KVDelim = false;
     private $ternaryCount = 0;
-    private $wrappingStartIndex  = -1;
-    private $onMethodChaining = false;
+    private $wrapperStartIndex = -1;
+    private $wrapperDetermined = false;
     private static $oneStepFinished = false;
 
-    public static function script($caseCmdPossible=false, $test=null) {
+    public static function script($parentOpener='', $parentTernaryCount=0, $test=null) {
 
         if ($test) {
             return call_user_func_array([new self(), $test['func']], $test['args']);
         }
        
         $expression = new Expression();
-        $expression->parse($caseCmdPossible);
-        return $expression->assembleScriptTokens();
+        $expression->parse($parentOpener, $parentTernaryCount);
+        return $expression->assembleScriptPieces();
     }
 
-    private function parse($caseCmdPossible, $parentOpener='', $parentTCount=0, $thread=1) {
+    private function parse($parentOpener, $parentTernaryCount) {
 
         $this->scriptedTokens = [];
 
@@ -559,14 +538,10 @@ class Expression {
         $prevTokenName  = '';
         $userCode = '';
         $isUnaryAttached= false;         
-        NameDot::initChain();
+        NameDotChain::init();
         
-        //echo 'thread up to '. $thread."\n";
-
         for (;;) {
-            //echo '<'.$parentOpener.'> thread: '.$thread."\n";
-            if ($this->isExpressionFinished($caseCmdPossible, $parentOpener, $parentTCount, $prevTokenGroup)) {
-                //echo 'thread down to '. ($thread-1)."\n";
+            if ($this->isExpressionFinished($parentOpener, $parentTernaryCount, $prevTokenGroup)) {
                 break;
             }
 
@@ -604,8 +579,8 @@ class Expression {
                         }
                     } else {    
                             
-                        //@if $prevTokenGroup is DOT|OPERATOR|O_OPERATOR|OPEN|UNARY|BI_UNARY
-                        if ( $currTokenGroup & (Token::OPERATOR|Token::O_OPERATOR|Token::CLOSE) ) {
+                        //@if $prevTokenGroup is DOT|OPERATOR|DELIMITER|OPEN|UNARY|BI_UNARY
+                        if ( $currTokenGroup & (Token::OPERATOR|Token::DELIMITER|Token::CLOSE) ) {
                             //@note If $currTokenGroup is CLOSE, $prevTokenGroup is always OPERAND. 
                             throw new SyntaxError('[011]Unexpected '.$token);
                         }
@@ -621,18 +596,22 @@ class Expression {
                 throw new SyntaxError('Invalid expression: '.$userCode);
             }
             if ($currTokenGroup !== Token::CLOSE) {
-                $this->setWrappingStartIndex($currTokenGroup, $prevTokenGroup);
+                $this->setWrapperStartIndex($currTokenGroup, $prevTokenGroup);
             }
             
-            $this->scriptedTokens[] = $this->{'parse'.$currTokenName}(
-                                                $token, $prevTokenGroup, $prevTokenName, $isUnaryAttached);
+            $this->scriptPieces[] = $this->{'parse'.$currTokenName}($token, $prevTokenGroup, $prevTokenName, $isUnaryAttached);
+            
+            /*if ($scriptPiece = $this->{'parse'.$currTokenName}($token, $prevTokenGroup, $prevTokenName, $isUnaryAttached)) {
+                $this->scriptPieces[] =  $scriptPiece;
+            }*/
+            
             
             if ($currTokenGroup & (Token::UNARY|Token::BI_UNARY)) {
                 $isUnaryAttached = $this->isUnaryAttached($isUnaryAttached, $prevTokenGroup, $currTokenGroup);
                 
-            } else if ($currTokenGroup & (Token::OPEN|Token::O_OPERATOR)) {
-                //echo 'start new thread ['.$this->opener.'] ['.$token.']   '.Scripter::$userCode."\n";
-                $this->parseNewExpression($thread);
+            } else if ($currTokenGroup & (Token::OPEN|Token::DELIMITER)) {
+
+                $this->scriptPieces[] = self::script($this->opener, $this->ternaryCount);
                 $currTokenGroup = Token::OPERAND;
             }
             
@@ -640,22 +619,11 @@ class Expression {
             $prevTokenName  = $currTokenName;
         }
     } 
-    private function assembleScriptTokens() {
-        $result = '';
-        foreach ($this->scriptedTokens as $scriptedToken) {
-            $result .= is_object($scriptedToken) 
-                ? $scriptedToken->assembleScriptTokens() 
-                : $scriptedToken;
-        }
-        return $result;
+    private function assembleScriptPieces() {
+        return implode('', $this->scriptPieces);
     }
-    private function parseNewExpression($thread) {
-        $expression = new Expression();
-        
-        $expression->parse(false, $this->opener, $this->ternaryCount, $thread+1); //@question: how about returning $expression.
-        $this->scriptedTokens[] = $expression;
-    }
-    private function isExpressionFinished($caseCmdPossible, $parentOpener, $parentTCount, $prevTokenGroup) {
+
+    private function isExpressionFinished($parentOpener, $parentTernaryCount, $prevTokenGroup) {
         $userCode = Scripter::$userCode;
         if (! $userCode ) {
             throw new SyntaxError('Template file ends without tag close.');
@@ -673,7 +641,7 @@ class Expression {
                 return true;
             }
         }*/
-        /*if ($parentOpener == '?' and $parentTCount == 0) {
+        /*if ($parentOpener == '?' and $parentTernaryCount == 0) {
             if (preg_match('~^\s*\:|\,|\?|\)|\}|\]~', $userCode)) {
                 self::$oneStepFinished = true;
                 return true;
@@ -684,7 +652,7 @@ class Expression {
             if (self::$oneStepFinished) {
                 return false;
             }
-            if ($parentOpener == '?') {//} and $parentTCount == 0) {
+            if ($parentOpener == '?') {//} and $parentTernaryCount == 0) {
                 if (preg_match('~^\s*(\:|\,|\?|\)|\}|\])~', $userCode, $matches)) {
                     //echo '[end of exp in ternary]<'.$matches[1].">\n\n";
                     //self::$oneStepFinished = true;
@@ -730,7 +698,7 @@ class Expression {
             if (in_array($this->opener, ['j', 'J'])) {
                 return false;
             }
-            if (!$parentOpener and $caseCmdPossible) {
+            if (!$parentOpener) {
                 return true;
             }
             throw new SyntaxError('[009]Unexpected :');
@@ -749,7 +717,7 @@ class Expression {
             // [ UNARY|OPERAND|CLOSE  |  OPERATOR|BI_UNARY|OPEN or 0 ]
             // if $prevTokenGroup is UNARY, true has been already returned.
             // if $prevTokenGroup is OPERAND|CLOSE, + - are binary operator.
-            // if $prevTokenGroup is OPERATOR|O_OPERATOR|BI_UNARY|OPEN or 0,
+            // if $prevTokenGroup is OPERATOR|DELIMITER|BI_UNARY|OPEN or 0,
             //      + and - are unary operator.
             return ($prevTokenGroup & (Token::OPERAND|Token::CLOSE)) ? false : true;
         }
@@ -758,63 +726,26 @@ class Expression {
 
 
     public function insertValWrapper() {
-        if ($this->wrappingStartIndex === -1) {
-            throw new FatalError('TplusScripter internal bug: fails to parsing val wrapping method.');
+        if ($this->wrapperStartIndex === -1) {
+            throw new FatalError('TplusScripter internal bug: fails to parse val wrapper method.');
         }
-        array_splice($this->scriptedTokens, $this->wrappingStartIndex, 0, Scripter::$valWrapper.'::_o(');
+        array_splice($this->scriptPieces, $this->wrapperStartIndex, 0, Scripter::$valWrapper.'::_o(');
     }
-    private function setWrappingStartIndex($currTokenGroup, $prevTokenGroup) {
-        if ($this->wrappingStartIndex === -1 ) {
-            if ($currTokenGroup & (Token::OPERAND|Token::OPEN)) {
+    private function setWrapperStartIndex($currTokenGroup, $prevTokenGroup) {
+        if ($this->wrapperStartIndex === -1 ) {
+            if ($currTokenGroup & (Token::DOT|Token::OPERAND|Token::OPEN)) {
                 //@note dot(.) has higher priority than unary operator.
-                $this->wrappingStartIndex = count($this->scriptedTokens);
+                $this->wrapperStartIndex = count($this->scriptPieces);
             } else if ($currTokenGroup == Token::DOT and $prevTokenGroup!=Token::CLOSE) {
-                $this->wrappingStartIndex = count($this->scriptedTokens);
+                $this->wrapperStartIndex = count($this->scriptPieces);
             }
         } else {
-            //if ($currTokenGroup & (Token::OPERATOR|Token::O_OPERATOR|Token::UNARY|Token::BI_UNARY)) {
+            //if ($currTokenGroup & (Token::OPERATOR|Token::DELIMITER|Token::UNARY|Token::BI_UNARY)) {
             if ($currTokenGroup & (Token::OPERATOR|Token::UNARY|Token::BI_UNARY)) { // CLOSE -> chaining possible
 
-                $this->wrappingStartIndex = -1;
+                $this->wrapperStartIndex = -1;
             }
         }
-    }
-    private function parseDot($token, $prevTokenGroup, $prevTokenName) {
-        if ($prevTokenGroup===Token::CLOSE
-            or $prevTokenGroup===Token::OPERAND && $prevTokenName!=='Name') {
-
-            $this->onMethodChaining = true;
-            return;
-        }
-
-        if (NameDot::chain() and strlen($token) > 1) { // abc.. xyz...
-            throw new SyntaxError('[008]Unexpected '.implode('', NameDot::chain()).$token);
-        }
-        NameDot::addToChain($token);
-    }
-    private function parseName($token) { // variable, function, object, method, array, key, namespace, class
-        if (in_array($token,['true', 'false', 'null', 'this'])) {
-            return $this->parseReserved($token);
-        }
-        if ($this->onMethodChaining) {
-            if (!preg_match('/^\s*\(/', Scripter::$userCode)) {
-                throw new SyntaxError('[007]unexpected'. '.'.$token);
-            }
-            $this->insertValWrapper();
-            $this->onMethodChaining = false;
-            return ')->'.$token;
-        }
-
-        return NameDot::parse($token, $this);
-    }
-    private function parseReserved($token) { // true|false|null|this
-        if (NameDot::chain()) {
-            throw new SyntaxError('"'.$token.'" is reserved word.');
-        }
-        if ($token !== 'this') { 
-            return $token;
-        }
-        NameDot::addToChain('this');
     }
 
 
@@ -904,8 +835,8 @@ class Expression {
         }
         if ($prevTokenName == 'Plus') {
             // @policy: Binary plus operator before string literal is changed to concat operator.
-            array_pop( $this->scriptedTokens );
-            array_push($this->scriptedTokens, '.');
+            array_pop( $this->scriptPieces );
+            array_push($this->scriptPieces, '.');
         }
         return $token;
     }
@@ -922,7 +853,7 @@ class Expression {
     }
 
     private function parseXcrement($token) {
-        throw new SyntaxError('Increment ++ or decrement -- operator are not allowd.');
+        throw new SyntaxError('Increment ++ or decrement -- operators are not allowd.');
     }
     private function parseComparison($token) {
         return $token;  // === == !== != < > <= >=      @todo check a == b == c
@@ -936,44 +867,106 @@ class Expression {
     private function parseArithOrBit($token) {
         return $token;  // % * / & ^ << >>              @todo check if operand is string
     }
+
+    private function parseDot($token, $prevTokenGroup, $prevTokenName) {
+        //@todo if $prevTokenGroup === Token::DOT, trow exception!! 
+        if ($prevTokenGroup===Token::CLOSE
+            or $prevTokenGroup===Token::OPERAND && $prevTokenName!=='Name') {
+
+            $this->wrapperDetermined = true;
+            return;
+        }
+
+        NameDotChain::addDot($token);
+
+    }
+    private function parseName($token) { // variable, function, object, method, array, key, namespace, class
+        if ($this->wrapperDetermined) {
+            NameDotChain::determineWrapper($token);
+            $this->insertValWrapper();
+            $this->wrapperDetermined = false;
+            return ')->'.$token;
+        }
+
+        return NameDotChain::addName($token, $this);
+    }
 }
 
 
-class NameDot {
-    private static $chain;  // Name chain is composed of only name and dot.
+class NameDotChain {
+    private static $tokens;
     private static $expression;
 
-    public static function chain() {
-        return self::$chain;
+    private static function isEmpty() {
+        return empty(self::$tokens);
     }
-    public static function addToChain($token) {
-        self::$chain .= $token;
+    private static function tokens() {
+        return self::$tokens;
     }
-    public static function initChain() {
-        self::$chain = '';
+    private static function add($token) {
+        self::$tokens[] = $token;
+    }
+    private static function names() {
+        return explode('.', implode('', self::$tokens));
+    }
+    private static function isFunc() {
+        return preg_match('/^\s*\(/', Scripter::$userCode);
+    }
+    private static function isNextDot() { //Chain not ends.
+        return preg_match('/^\s*\./', Scripter::$userCode);
     }
 
-    public static function parse($token, $expression=null) {
-        self::addToChain($token);
+    private static function isWrapper($method) {
+        return in_array(strtolower($method), Scripter::valWrapperMethods());
+    }
+
+    public static function init() {
+        self::$tokens = [];
+    }
+    public static function determineWrapper($token) {
+        if (!self::isFunc()) {
+            throw new SyntaxError('[007]unexpected '.implode('', self::tokens()).$token);
+        }
+    }
+    public static function addDot($token) {
+        if (!self::isEmpty() and strlen($token) > 1) { //  multiple dots after Name. e.g) 'abc..' 'xyz...'
+            throw new SyntaxError('[008]Unexpected '.implode('', self::tokens()).$token);
+        }
+        self::add($token);
+    }
+    public static function addName($token, $expression) {
+        if (in_array($token,['true', 'false', 'null', 'this'])) {
+            if (!self::isEmpty() or self::isFunc()) {
+                throw new SyntaxError('"'.$token.'" is reserved word.');
+            }
+            if ($token !== 'this') { 
+                if (self::isNextDot()) {
+                    throw new SyntaxError('"'.$token.'" is reserved word.');
+                }
+                return $token;
+            }
+        }
+
+        self::add($token);
         self::$expression = $expression;
 
-        if (preg_match('/^\s*\./', Scripter::$userCode)) { // chain not ends.
+        if (self::isNextDot()) { // chain not ends.
             return '';
         }
 
-        if (self::$chain[0]==='.') {
+        if (preg_match('/\.+/', self::$tokens[0])) {
             return self::parseLoopMember();
         }
 
-        if (preg_match('/^this\.?/', self::$chain)) {
+        if ('this' == self::$tokens[0]) {
             return self::parseThis();
         }
 
-        if (preg_match('/^(GET|SERVER|COOKIE|SESSION|GLOBALS)\.?/', self::$chain)) {
+        if (in_array(self::$tokens[0], ['GET','SERVER','COOKIE','SESSION','GLOBALS'])) {
             return self::parseAutoGlobals();
         }
 
-        if (preg_match('/^\s*\(/', Scripter::$userCode)) {
+        if (self::isFunc()) {
             return self::parseFunction();
         }
 
@@ -981,16 +974,17 @@ class NameDot {
     }
 
     private static function parseAutoGlobals() {
-        if (self::isFunc()) {
-            throw new SyntaxError('Unexpected code: '.self::$chain.'()');
-        }
+        /*if (self::isFunc()) {
+            throw new SyntaxError('Unexpected code: '.implode('', self::$tokens).'()');
+        }*/
 
-        $names = explode('.', self::$chain);
+        $names = self::names();
+        
         $global = array_shift($names);
 
         if ($global == 'GLOBALS') {
             if (empty($names)) {
-                throw new SyntaxError('Unexpected code: '.self::$chain);    
+                throw new SyntaxError('Unexpected code: '.implode('', self::$tokens));    
             }
             $script = '$'.$global;
             foreach ($names as $name) {
@@ -999,74 +993,74 @@ class NameDot {
 
         } else {    // GET SERVER COOKIE SESSION
             if (count($names) != 1) {
-                throw new SyntaxError('Unexpected code: '.self::$chain);
+                throw new SyntaxError('Unexpected code: '.implode('', self::$tokens));
             }
             $script = '$_'.$global.'["'.$names[0].'"]';
         } 
         
-        self::initChain();
+        self::init();
         return $script;
     }
     
     private static function parseThis() {
-        $names = explode('.', self::$chain);
-        
-        self::initChain();
+        $names = self::names();
+        self::init();
 
         if (! self::isFunc() ) {
             if (count($names) === 1) {
                 return '$this';
             }
-            throw new SyntaxError('access of object property is not allowd.'); // this.prop
+            throw new SyntaxError('access to object property is not allowd. 1'); // this.prop
         }
         if (count($names) !== 2) {
-            throw new SyntaxError('access of object property is not allowd.');  // this.prop.foo
+            throw new SyntaxError('access to object property is not allowd. 2');  // this.prop.foo
         }
         return '$this->'.$names[1];     // this.method()
     }
 
-    private static function parseLoopMember() {  // @todo  h keword.
-        preg_match('/^(\.+)(.+)$/s', self::$chain, $matches);
-        $dots  = $matches[1];
-        $names = explode('.', $matches[2]);
+    private static function parseLoopMember() {  
+        $tokens = self::$tokens;
+        $dots  = array_shift($tokens);
+        $names = explode('.', implode('', $tokens));
         $loopDepth = strlen($dots);
 
         if ($loopDepth > Statement::loopDepth()) {
-            throw new SyntaxError('depth of loop member "'.self::$chain.'" is not correct.');
+            throw new SyntaxError('depth of loop member "'.implode('', self::$tokens).'" is not correct.');
         }
 
         if (in_array($names[0], ['i', 's', 'k', 'v'])) {
             if (count($names)===1) {
                 if (self::isFunc()) {
-                    throw new SyntaxError('Unexpected '.self::$chain.'("');
+                    throw new SyntaxError('Unexpected '.implode('', self::$tokens).'("');
                 }
-                self::initChain();
+                self::init();
                 return Statement::loopName($loopDepth, $names[0]);
             }
             if (count($names)===2) {
                 if (self::isFunc()) {
                     if (self::isWrapper($names[1])) {
                         self::$expression->insertValWrapper();
-                        self::initChain();
+                        self::init();
                         return Statement::loopName($loopDepth, $names[0]).')->'.$names[1];
                     } else {
                         if (in_array($names[0], ['i', 's', 'k'])) { 
-                            throw new FatalError('TplusValWrapper doesn\'t have method '.$names[1].'()');
+                            throw new FatalError('TplValWrapper doesn\'t have method '.$names[1].'()');
                         }
-                        self::initChain();
+                        self::init();
+                        // .
                         return Statement::loopName($loopDepth, 'v').'->'.$names[1];
                     }
                 } else {
                     if (in_array($names[0], ['i', 's', 'k'])) { 
-                        throw new SyntaxError('Unexpected "'.self::$chain.'"');
+                        throw new SyntaxError('Unexpected "'.implode('', self::$tokens).'"');
                     }
-                    self::initChain();
+                    self::init();
                     return Statement::loopName($loopDepth, 'v').'["'.$names[1].'"]';
                 }
             }
             if (count($names)>2) { 
                 if (in_array($names[0], ['i', 's', 'k'])) { 
-                    throw new SyntaxError('Unexpected "'.self::$chain.'"');
+                    throw new SyntaxError('Unexpected "'.implode('', self::$tokens).'"');
                 }
                 
                 $keyword = array_shift($names); //remove 'v'
@@ -1076,7 +1070,7 @@ class NameDot {
             }
         }
         if (!in_array($names[0], ['i', 's', 'k', 'v', 'h'])) {
-
+            // .name .price() .xxx.zzz()
             return self::parseV($names, $loopDepth);
         } 
 
@@ -1087,18 +1081,12 @@ class NameDot {
             }
             ['a'=>$a, 'i'=>$i, 's'=>$s, 'k'=>$k, 'v'=>$v] = Statement::loopNames($loopDepth);
             
-            self::initChain();
+            self::init();
 
             return Scripter::$loopHelper.'::_o('.$i.','.$s.','.$k.','.$v.')->'.$names[1];
         }
     }
 
-    private static function isFunc() {
-        return preg_match('/^\s*\(/', Scripter::$userCode);
-    }
-    private static function isWrapper($method) {
-        return in_array(strtolower($method), Scripter::valWrapperMethods());
-    }
     private static function parseV($names, $loopDepth) {
         $script = Statement::loopName($loopDepth, 'v');
         if (self::isFunc()) {
@@ -1106,7 +1094,7 @@ class NameDot {
             foreach ($names as $name) {
                 $script .= '["'. $name.'"]';
             }
-            self::initChain();
+            self::init();
             if (self::isWrapper($method)) {
                 self::$expression->insertValWrapper();
                 return $script.')->'.$method;
@@ -1117,30 +1105,32 @@ class NameDot {
             foreach ($names as $name) {
                 $script .= '["'. $name.'"]';
             }
-            self::initChain();
+            self::init();
             return $script;
         }
     }
 
     private static function parseFunction() {
         // 1. function
-        if (!strstr(self::$chain, '.')) {
-            $func_name = self::$chain;
+        if (!strstr(implode('',self::$tokens), '.')) {
+            $func_name = self::$tokens[0];
             if (self::isConstantName($func_name)) { //@
                 throw new SyntaxError($func_name.'() has constant name.');
             }
             if (!function_exists($func_name) and !in_array($func_name,['isset','empty'])) {
                 throw new SyntaxError('function '.$func_name.'() is not defined.');
             }
-            self::initChain();
+            self::init();
             return $func_name;
         }
         
-        // 2. function in namespace  or  method  or  wrapper method
-        $names = explode('.', self::$chain);
-        foreach($names as $name) {
+        // 2
+
+        // 3. function in namespace  or  method  or  wrapper method
+        $names = self::names();
+        foreach($names as $name) {      // @ 상수에도 래퍼를 붙일 수 있다. 정정 필요
             if (self::isConstantName($name)) {
-                throw new SyntaxError(self::$chain.'() has constant name.');
+                throw new SyntaxError(self::$tokens.'() has constant name.');
             }
         }
 
@@ -1148,15 +1138,15 @@ class NameDot {
         $name  = array_pop($names);
         $namespaces = empty($names) ? '' : '\\'.implode('\\', $names);
 
-        // 2.1. namespace\functions
+        // 3.1. namespace\functions
         $namespace = $name;
         $fullFunction = $namespaces.'\\'.$namespace.'\\'.$func;
         if (function_exists($fullFunction)) {
-            self::initChain();
+            self::init();
             return $fullFunction;
         }
 
-        // 2.2. namespace\class::method
+        // 3.2. namespace\class::method
         if (self::isClassName($name)) {
             $class = $name;
             $fullClass = $namespaces.'\\'.$class;
@@ -1166,47 +1156,46 @@ class NameDot {
             if (!method_exists($fullClass, $func)) {
                 throw new FatalError('static method '.$func.'() does not exist in '.$fullClass);
             }
-            self::initChain();
+            self::init();
             return $fullClass.'::'.$func;
         } 
 
-        // 3. dynamic method
+        // 4. dynamic method
         $script = '$V';
-        $names = explode('.', self::$chain);
+        $names = self::names();
         $method = array_pop($names);
-
         
         while ($name = array_shift($names)) {
             $script .= '["'.$name.'"]';
         }
 
-        self::initChain();
-        // 3.1. wrapper method
+        self::init();
+        // 4.1. wrapper method
         if (in_array($method, Scripter::valWrapperMethods())) {
             self::$expression->insertValWrapper();
             return $script.')->'.$method;
         }
-        // 3.2. object method
+        // 4.2. object method
         return $script.'->'.$method;
     }
 
     private static function parseVariable() {        
-        $names = explode('.', self::$chain);
+        $names = self::names();
         $frontNames = [];
         while ($name = array_shift($names)) {
             $frontNames[] = $name;
             if (self::isConstantName($name)) {
-                self::initChain();
+                self::init();
                 return self::parseConstantChain($frontNames, $names);
             }
         }
 
-        $names = explode('.', self::$chain);
+        $names = self::names();
         $var = '$V';
         foreach ($names as $name) {
             $var .= '["'.$name.'"]';
         }
-        self::initChain();
+        self::init();
         return $var;
     }
 
@@ -1239,11 +1228,11 @@ class NameDot {
         }
         return $constantChain;
     }
-    private static function isConstantName($token) {
-        return preg_match('/\p{Lu}/u', $token) and !preg_match('/\p{Ll}/u', $token);
+    private static function isConstantName($name) {
+        return preg_match('/\p{Lu}/u', $name) and !preg_match('/\p{Ll}/u', $name);
     }
 
-    private static function isClassName($token) {
-        return preg_match('/^\p{Lu}/u', $token) and preg_match('/\p{Ll}/u', $token);
+    private static function isClassName($name) {
+        return preg_match('/^\p{Lu}/u', $name) and preg_match('/\p{Ll}/u', $name);
     }
 }
