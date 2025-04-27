@@ -651,6 +651,7 @@ class Expression {
     private $cxt = 0;
     private $scriptPieces = [];
     private $wrapperStartIndex = -1;
+    private $wrapperDetermined = false;
     
 
     public static function script() {
@@ -869,9 +870,24 @@ class Expression {
     }
 
     private function parseDot($prevToken, $currToken) {
+
+        if ($prevToken['group']===Token::CLOSE
+            or $prevToken['group']===Token::OPERAND && $prevToken['name']!=='Name') {
+
+            $this->wrapperDetermined = true;
+            return;
+        }
+
         NameDotChain::addDot($currToken['value']);
     }
     private function parseName($prevToken, $currToken) { // variable, function, object, method, array, key, namespace, class
+        if ($this->wrapperDetermined) {
+            NameDotChain::confirmWrapper($currToken['value']);
+            $this->insertValWrapper();
+            $this->wrapperDetermined = false;
+            return ')->'.$currToken['value'];
+        }
+
         return NameDotChain::addName($currToken['value'], $this);
     }
 }
@@ -885,6 +901,15 @@ class NameDotChain {
     public static function init() {
         self::$tokens = [];
         self::$names = [];
+    }
+
+    public static function confirmWrapper($name) {
+        if (!self::isFunc()) {
+            throw new SyntaxError("[007]unexpected {$name}");
+        }
+        if (!self::isWrapper()) {
+            throw new SyntaxError("[007]Wrapper method {$name}() not found in class ".Scripter::$valWrapper);
+        }
     }
 
     public static function addDot($token) {
@@ -927,32 +952,23 @@ class NameDotChain {
             return self::parseAutoGlobals();
         }
 
-        if (self::isFunc()) {
-            return self::parseFunction();
+        if ($script = self::parseStatic()) {
+            return $script;
         }
-
-        return self::parseVariable();
+        return self::parseArray(self::$names);
     }
 
     private static function isEmpty() {
         return empty(self::$tokens);
     }
-    private static function isFunc() {
-        return preg_match('/^\s*\(/', Scripter::$userCode);
-    }
     private static function isNextDot() { //Chain not ends.
         return preg_match('/^\s*\./', Scripter::$userCode);
     }
+    public static function isFunc() {
+        return preg_match('/^\s*\(/', Scripter::$userCode);
+    }
     private static function isWrapper($method) {
         return in_array(strtolower($method), Scripter::valWrapperMethods());
-    }
-
-    private static function wrapIfNeeded($script, $method) {
-        if (self::isWrapper($method)) {
-            self::$expression->insertValWrapper();
-            return $script . ')->' . $method;
-        }
-        return $script . '->' . $method;
     }
 
     private static function parseAutoGlobals() {
@@ -1003,60 +1019,67 @@ class NameDotChain {
         return '$this->'.$names[1];     // this.method()
     }
 
+
     private static function parseLoopMember() {  
         $names = self::$names;
-        $tokens = self::$tokens;        
-        $dots  = array_shift($tokens);
-        $loopDepth = strlen($dots);
+        $tokens = self::$tokens;
+        $loopDepth = strlen(array_shift($tokens));
 
         if ($loopDepth > Statement::loopDepth()) {
             throw new SyntaxError('[027]depth of loop member "'.implode('', self::$tokens).'" is not correct.');
         }
 
         if (in_array($names[0], ['i', 's', 'k'])) {
-            if (count($names)===1) {
-                if (self::isFunc()) {
-                    throw new SyntaxError('[028]Unexpected '.implode('', self::$tokens).'("');
-                }
-                self::init();
-                return Statement::loopName($loopDepth, $names[0]);
-            }
-            if (count($names)===2 and self::isFunc()) {
-                if (self::isWrapper($names[1])) {
-                    self::$expression->insertValWrapper();
-                    self::init();
-                    return Statement::loopName($loopDepth, $names[0]).')->'.$names[1];
+            return self::_parseIsk($names, $loopDepth);
+        }
 
-                }
+        if ($names[0] === 'h') {
+            return self::_parseH($names, $loopDepth);
+        }
+
+        return self::_parseV($names, $loopDepth);
+    }
+    private static function _parseIsk($names, $loopDepth) {
+        if (count($names)===1) {
+            if (self::isFunc()) {
+                throw new SyntaxError('[028]Unexpected '.implode('', self::$tokens).'("');
+            }
+            self::init();
+            return Statement::loopName($loopDepth, $names[0]);
+        }
+        if (count($names)===2 and self::isFunc()) {
+            if (!self::isWrapper($names[1])) {
                 //@note i,s and k cannot be object and so cannot have non-wrapper method.
                 throw new FatalError("[029]".Scripter::$valWrapper." doesn't have method {$names[1]}()");
             }
-            //@note i,s and k cannot be array and so cannot have element.
-            throw new SyntaxError('[030]Unexpected "'.implode('', self::$tokens).'"');
-        }
 
-        if ($names[0] === 'h' and count($names) === 2 and self::isFunc()) { // loop helper method
-            $helperMethod = strtolower($names[1]);
-            if (!in_array($helperMethod, Scripter::loopHelperMethods())) {
-                throw new FatalError('[031]loop helper method '.$helperMethod.'() is not defined.');
-            }
-            ['a'=>$a, 'i'=>$i, 's'=>$s, 'k'=>$k, 'v'=>$v] = Statement::loopNames($loopDepth);
-            
+            self::$expression->insertValWrapper();
+
             self::init();
-
-            return Scripter::$loopHelper.'::_o('.$i.','.$s.','.$k.','.$v.')->'.$names[1];
+            return Statement::loopName($loopDepth, $names[0]).')->'.$names[1];
         }
-
+        //@note i,s and k cannot be array and so cannot have element.
+        throw new SyntaxError('[030]Unexpected "'.implode('', self::$tokens).'"');
+    }
+    private static function _parseH($names, $loopDepth) {
+        if (! (count($names) === 2 and self::isFunc())) {
+            throw new SyntaxError('[033]Unexpected '.implode('', self::$tokens));
+        }
+        $helperMethod = strtolower($names[1]);
+        if (!in_array($helperMethod, Scripter::loopHelperMethods())) {
+            throw new FatalError('[031]loop helper method '.$helperMethod.'() is not defined.');
+        }
+        ['a'=>$a, 'i'=>$i, 's'=>$s, 'k'=>$k, 'v'=>$v] = Statement::loopNames($loopDepth);
+        
+        self::init();
+        return Scripter::$loopHelper.'::_o('.$i.','.$s.','.$k.','.$v.')->'.$names[1];
+    }
+    private static function _parseV($names, $loopDepth) {
         if ($names[0]==='v') {
             $names = array_slice($names, 1);
-            
         }
-        return self::parseV($names, $loopDepth);    // .xxx .yyy.zzz .qqq.ppp()
-    }
 
-    private static function parseV($names, $loopDepth) {
         $script = Statement::loopName($loopDepth, 'v');
-
         $method = self::isFunc() ? array_pop($names) : null;
 
         foreach ($names as $name) {
@@ -1064,38 +1087,194 @@ class NameDotChain {
         }
 
         self::init();
-
         return $method
             ? self::wrapIfNeeded($script, $method)
             : $script;
-    
     }
 
-    private static function parseFunction() {
-        // 1. function
-        if (count(self::$names) === 1) {
-            $func_name = self::$names[0];
-            if (self::isConstantName($func_name)) { //@
-                throw new SyntaxError("[032]function {$func_name}() has constant name.");
+
+    private static function parseStatic() {
+        if (self::isFunc()) {
+            if (count(self::names)===1) {
+                return self::_parseFunc();
             }
-            if (!function_exists($func_name) and !in_array($func_name,['isset','empty'])) {
-                throw new SyntaxError("[033]function {$func_name}() is not defined.");
+            
+            if ($script = self::_parseConstWithWrapperFunc()) {
+                return $script;
             }
-            self::init();
-            return $func_name;
+
+            $names = self::names;
+            $func = array_pop($names);
+            $path = '';
+            foreach ($names as $name) {
+                $path .= '\\'.$name;
+            }
+            if (class_exists($path)) {
+                return self::_parseStaticMethod($path, $func);
+            }
+            return self::_parseNsFuncOrDynamicWithWrapper($names, $path, $func);
+        }
+        return self::_parseConst(self::names);
+    }
+ 
+    private static function _parseFunc() {
+        $func = '\\'.self::names[0];
+        if (!function_exists($func) and !in_array($func,['isset','empty'])) {
+            throw new SyntaxError("[034]function `{$func}()` is not defined.");
+        }
+        self::init();
+        return $func;
+    }
+
+    private static function _parseConstWithWrapperFunc() {
+        $names = self::names;
+        $func = array_pop($names);
+        $script = self::_parseConst($names);
+
+        if (!$script) {
+            return false;
+        }
+
+        return self::wrapIfNeeded($script, $func, true);
+    }
+
+    private static function _parseStaticMethod($class, $method) {
+        $script = $class.'::'.$method;
+        if (!method_exists($class, $method)) {
+            throw new FatalError("[035]Static method `{$script}()` not found.");
+        }
+        self::init();
+        return $script;
+    }
+  
+    private static function _parseNsFuncOrDynamicWithWrapper($names, $path, $func) {
+        $script = $path.$func;
+        if (function_exists($script)) {
+            return $script;
+        }
+
+        return self::parseArray($names, $func);
+    }
+
+    private static function parseArray($names, $func=null) {
+        $script = '$V';
+        foreach ($names as $name) {
+            $script .= '["'.$name.'"]';
+        }
+
+        self::init();
+        return $func
+            ? self::wrapIfNeeded($script, $func, true)
+            : $script;
+    }
+
+
+    private static function wrapIfNeeded($script, $method, $onlyWrapper = false) {
+        if (self::isWrapper($method)) {
+            self::$expression->insertValWrapper();
+            return $script . ')->' . $method;
+        }
+        if ($onlyWrapper) {
+            throw new FatalError("[023]Wrapper method `{$method}` not found in `".implode('', self::$tokens)."`");    
+        }
+        return $script . '->' . $method;
+    }
+
+    private static function _parseConst($names) {
+        $ns = '\\';
+        $constName = null;
+        foreach ($names as $name) {
+            if (self::_constName($name)) {
+                $constName = $name;
+                break;
+            } else {
+                $ns = $name.'\\';
+            }
         }
         
-        // 2
+        if (!$constName) {
+            return false;
+        }
 
+        $script = $ns.$constName;
+        foreach ($names as $name) {
+            if (self::_constName($name)) {
+                throw new SyntaxError('[037]Unexpected constant usage: '.implode('', self::$tokens));    
+            }
+            $script .= "[{$name}]";
+        }
+        if (!defined($script)) {
+            throw new FatalError("[038]Constant `{$script}` not found.");
+        }
+
+        return $script;
+    }
+
+
+
+/*    private static function _parseNsFuncOrStaticMethod() {
+        $names = self::names;
+        $func = array_pop($names);
+        $path = '';
+        foreach ($names as $name) {
+            $path .= '\\'.$name;
+        }
+        if (class_exists($path)) {
+            return self::_parseStaticMethod($path, $func);
+        }
+        return self::_parseNsFuncOrDynamicWithWrapper($path, $func);
+    }*/
+    
+    
+    /*private static function checkFuncName($name) {
+        if (self::isConstantName($func)) { //@
+            throw new SyntaxError("[032]function {$func}() has constant name.");
+        }
+    }*/
+
+    private static function parseFunction___() {
+        // 1. function
+        if (count(self::$names) === 1) {
+            $func = self::$names[0];
+            self::checkFuncName($func);
+            if (!function_exists($func) and !in_array($func,['isset','empty'])) {
+                throw new SyntaxError("[]function {$func}() is not defined.");
+            }
+            self::init();
+            return $func;
+        }
+
+        // 2
+        $names = self::names;
+        $method = array_pop($names);
+        self::checkFuncName($method);
+        $script = self::parseVariable($names);
+        return self::wrapIfNeeded($script ,$func);
+
+     
+
+        $frontNames = [];
+        $backNames  = self::$names;
+        while ($name = array_shift($backNames)) {
+            $frontNames[] = $name;
+            if (self::isConstantName($name)) {
+                $method = self::isFunc() ? array_pop($backNames) : null;
+                $constExpr = self::parseConstantChain($frontNames, $backNames);
+                self::init();
+                return $method
+                    ? self::wrapIfNeeded($constExpr, $method)
+                    : $constExpr;
+            }
+        }
         // 3. function in namespace  or  method  or  wrapper method
-        $names = self::$names;
+        /*$names = self::$names;
         foreach($names as $name) {      // @ 상수에도 래퍼를 붙일 수 있다. 정정 필요
             if (self::isConstantName($name)) {
                 throw new SyntaxError(implode('', self::$tokens).'() has constant name.');
             }
-        }
+        }*/
 
-        $func  = array_pop($names);
+        //$func  = array_pop($names);
         $name  = array_pop($names);
         $namespaces = empty($names) ? '' : '\\'.implode('\\', $names);
 
@@ -1140,18 +1319,18 @@ class NameDotChain {
         return $script.'->'.$method;
     }
 
-    private static function parseVariable() {        
-        $names = self::$names;
+    private static function parseVariable($names) {
+        $backnames = $names;
         $frontNames = [];
-        while ($name = array_shift($names)) {
+        while ($name = array_shift($$backnames)) {
             $frontNames[] = $name;
             if (self::isConstantName($name)) {
                 self::init();
-                return self::parseConstantChain($frontNames, $names);
+                return self::parseConstantChain($frontNames, $backnames);
             }
         }
 
-        $names = self::$names;
+        //$names = self::$names;
         $var = '$V';
         foreach ($names as $name) {
             $var .= '["'.$name.'"]';
@@ -1190,10 +1369,55 @@ class NameDotChain {
         return $constantChain;
     }
     private static function isConstantName($name) {
-        return preg_match('/\p{Lu}/u', $name) and !preg_match('/\p{Ll}/u', $name);
+        return preg_match('/^[A-Z][A-Z0-9_]*$/', $name);
+        //return preg_match('/\p{Lu}/u', $name) and !preg_match('/\p{Ll}/u', $name);
     }
 
     private static function isClassName($name) {
-        return preg_match('/^\p{Lu}/u', $name) and preg_match('/\p{Ll}/u', $name);
+        return preg_match('/^[A-Z]/', $name) and preg_match('/[a-z]/u', $name);
+        //return preg_match('/^\p{Lu}/u', $name) and preg_match('/\p{Ll}/u', $name);
     }
 }
+
+/*
+
+\func()
+\Class::staticMethod()
+\NS\func()
+\NS\Class::staticMethod()
+
+\CONST
+\ARR_CONST['key']
+\NS\CONST
+\NS\ARR_CONST['key']
+\Class::CONST
+\Class::ARR_CONST['key']
+\NS\Class::CONST
+\NS\Class::ARR_CONST['key']
+
+variable
+arr.variable
+
+NS 반복가능
+ARR_CONST['key'] 에서 ['key'] 반복가능
+arr.variable arr. 반복가능..
+
+그리고 모든 경우에 래퍼붙을 수 있음..
+
+
+
+foo().bar() 여기서 bar() 는 다음 번 NameDotChain 호출시에 처리되고..
+
+\CONST['a']['b']         <--       [=CONST.a.b]
+\Class::CONST['x']['y']  <--       [=Class.CONST.a.b]  특이사항 없어보이고
+
+
+arr.variable[blah blah].other   ...... 여기서 other 는 지원하지 않아요...  .other() 래퍼만 붙일 수 있습니다.
+
+foo().bar  -------- 이것도 지원하지 않아요.. bar() 래퍼만 붙일 수 있습니다. 지원하는게 좋을까요...
+
+
+그리고 보니까.. parseFunction() / parseVariable() 로 나눴었는데
+뭔가 느낌적인 느낌이..  parseStatic() / parseDynmic() 이렇게 구분하는게 쓸모가 있어보여요..
+
+*/
