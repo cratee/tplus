@@ -1,7 +1,7 @@
 <?php
 /**
     ------------------------------------------------------------------------------
-    Tplus 1.0.4 
+    Tplus 1.0.5
     Released 2024-12-31
 
     
@@ -36,6 +36,7 @@ class Scripter {
     private static $currentLine = 1;
 
     public static $wrapper;
+    public static $valWrapper;
     public static $loopHelper;
     public static $userCode;
 
@@ -63,7 +64,7 @@ class Scripter {
         }
         if (ini_get('display_errors')) {
             echo '<b>'.$title.'</b>'.htmlspecialchars($message).' in <b>'.$htmlPath.'</b> on line <b>'.$currentLine.'</b>';
-            // ? ob_end_flush();
+            if (ob_get_level()) ob_end_flush();
         }
         exit;
     }
@@ -93,7 +94,7 @@ class Scripter {
             $path .= '/'.$dir;
             if (!is_dir($path)) {
                 if (!mkdir($path, $filePerms)) {
-                    throw new FatalError('fail to create directory '.$path.' check the write-permission.');
+                    throw new FatalError('[036]fail to create directory '.$path.' check the write-permission.');
                 }
             }
         }
@@ -126,11 +127,10 @@ class Scripter {
     }
     private static function getMethods($class) {
         static $methods = [];
-        if (empty($methods[$class])) {
+        if (!isset($methods[$class])) {
             $methods[$class] = [];
             if (!class_exists($class)) {
-                //@todo "There is no ... class $class which contains method ....()"
-                throw new FatalError('--- class "'.substr($class, 1).'" does not exist.');
+                throw new FatalError('[039]Class "'.substr($class, 1).'" does not exist.');
             }
             $reflectionMethods = (new \ReflectionClass($class))->getMethods(\ReflectionMethod::IS_PUBLIC);
             foreach ($reflectionMethods as $m) {
@@ -269,14 +269,14 @@ class Stack {
     protected $items = [];
 
     public function peek() {
-        return end($this->items);
+        return $this->isEmpty() ? null : end($this->items);
     }
 	public function isEmpty() {
 		return empty($this->items);
 	}
-	public function count() {
-		return  (func_num_args() > 0) 
-            ? array_count_values($this->items)[func_get_arg(0)]
+	public function count($item = null) {
+		return  $item 
+            ? array_count_values($this->items)[$item]
             : count($this->items) 
         ;
 	}
@@ -442,8 +442,6 @@ class Token {
     const WRAP_SET  = self::OPEN | self::DOT | self::OPERAND;
     const WRAP_UNSET= self::OPERATOR;
 
-    //const KEYWORD   = ['true', 'false', 'null', 'this'];
-
     const GROUPS = [
         self::SPACE => [
             'Space'  =>'\s+'
@@ -504,145 +502,79 @@ class Cxt {		// Child Expression Trigger
 	const FUN_COMMA = 1<<11;
 	const TRN_COLON = 1<<12;
 
-    private static $expression;
+    
+    private static array $expressionEndMap = [
+        self::FUN         => ['end' => [')'],             'check' => [',']],
+        self::JKT         => ['end' => [']'],             'check' => [':', ',']],
+        self::JCE         => ['end' => ['}'],             'check' => [':', ',']],
+        self::PAR         => ['check' => [')']],
+        self::ICE         => ['check' => ['}']],
+        self::IKT         => ['check' => [']']],
+        self::TRN         => ['check' => [':']],
+        self::FUN_COMMA   => ['check' => [',', ')']],
+        self::JCE_COMMA   => ['check' => [',', ':', '}']],
+        self::JCE_COLON   => ['check' => [',', '}']],
+        self::JKT_COMMA   => ['check' => [',', ':', ']']],
+        self::JKT_COLON   => ['check' => [',', ']']],
+        self::TRN_COLON   => ['check' => [',', ')', ']', '}']],
+    ];
 
-    public static function get($prevToken, $currToken, $prevCxt) {
+    public static function isEndOf($parentCxt, $stopCode, $expession) {
+        if (!$parentCxt && $stopCode === ']') { // end tag
+            return true;
+        }
+
+        $map = self::$expressionEndMap[$parentCxt] ?? null;
+
+        if (!empty($map['end']) and in_array($stopCode, $map['end'])) {
+            return true;
+        }
+
+        if (!empty($map['check']) and in_array($stopCode, $map['check'])) {
+            return $expession->preventEmptyExpression($stopCode);
+        }
+
+        throw new SyntaxError('[014]Unexpected token '.$stopCode);
+    }
+
+    public static function get($prevToken, $currToken, $cxt) {
         switch ($currToken['value']) {
             case '{': return $prevToken['name']=='Name' ? self::ICE : self::JCE;
             case '[': return $prevToken['name']=='Name' ? self::IKT : self::JKT;
             case '(': return $prevToken['name']=='Name' ? self::FUN : self::PAR;
-            case '?': return self::ternary($prevToken, $currToken, $prevCxt);
-            case ',': return self::comma($prevCxt);
-            case ':': return self::colon($prevCxt);
+            case '?': return self::ternary($prevToken, $currToken, $cxt);
+            case ',': return self::comma($cxt);
+            case ':': return self::colon($cxt);
         }
     }
-    private static function comma($prevCxt) {
-        switch ($prevCxt) {
+    private static function comma($cxt) {
+        switch ($cxt) {
             case self::JCE : return self::JCE_COMMA;
             case self::JKT : return self::JKT_COMMA;
             case self::FUN : return self::FUN_COMMA;
+            case self::JCE_COMMA : return self::JCE_COMMA;
+            case self::JKT_COMMA : return self::JKT_COMMA;
+            case self::JCE_COLON : return self::JCE_COMMA;
+            case self::JKT_COLON : return self::JKT_COMMA;
         }
         throw new SyntaxError('[018]Invalid token: ","');
     }
-    private static function colon($prevCxt) {
-        switch ($prevCxt) {
+    private static function colon($cxt) {
+        switch ($cxt) {
             case self::JCE : return self::JCE_COLON;
             case self::JKT : return self::JKT_COLON;
             case self::TRN : return self::TRN_COLON;
+            case self::JCE_COMMA : return self::JCE_COLON;
+            case self::JKT_COMMA : return self::JKT_COLON;
         }
         throw new SyntaxError('[017]Invalid token: ":"');
     }
-    private static function ternary($prevToken, $currToken, $prevCxt) {
-        if ($prevToken['group'] & (Token::OPERAND | Token::CLOSE) and
-            !($prevCxt & (self::TRN | self::TRN_COLON))) {
+    private static function ternary($prevToken, $currToken, $cxt) {
+        if ($prevToken['group'] & (Token::OPERAND | Token::CLOSE) 
+            and !($cxt & (self::TRN | self::TRN_COLON))) {
             return self::TRN;
         }
         throw new SyntaxError('[016]Invalid token: "?"');
-    }
-
-    public static function isEndOf($prevCxt, $stopCode, $expression) {
-
-        // @note  {}, [] and func() allow empty expressions.
-
-        $s = $stopCode;
-        self::$expression = $expression;
-    
-        if ($prevCxt === self::FUN) {
-            if ($s === ')') {
-                return true;
-            }
-            if ($s === ',') {
-                self::preventEmptryExpression($s);
-                return true;
-            }
-
-        } else if ($prevCxt === self::FUN_COMMA) {
-            if ($s === ',' || $s === ')') {
-                self::preventEmptryExpression($s);
-                return true;
-            }
-
-        } else if ($prevCxt === self::PAR) {
-            if ($s === ')') {
-                self::preventEmptryExpression($s);
-                return true;
-            }
-
-        } else if ($prevCxt === self::ICE) {
-            if ($s === '}') {
-                self::preventEmptryExpression($s);
-                return true;
-            }
-
-        } else if ($prevCxt === self::IKT) {
-            if ($s === ']') {
-                self::preventEmptryExpression($s);
-                return true;
-            }
-
-        } else if ($prevCxt === self::JCE) {
-            if ($s === '}') {
-                return true;
-            }
-
-            if ($s === ':' || $s === ',') {
-                self::preventEmptryExpression($s);
-                return true;
-            }
-            
-        } if ($prevCxt === self::JKT) {
-            if ($s === ']') {
-                return true;
-            }
-
-            if ($s === ':' || $s === ',') {
-                self::preventEmptryExpression($s);
-                return true;
-            }
-
-        } else if ($prevCxt === self::JCE_COMMA) {
-            if ( $s === ',' || $s === ':' || $s === '}') {
-                self::preventEmptryExpression($s);
-                return true;
-            }
-
-        } else if ($prevCxt === self::JKT_COMMA) {
-            if ($s === ',' || $s === ':' || $s === ']') {
-                self::preventEmptryExpression($s);
-                return true;
-            }
-
-        } else if ($prevCxt === self::JCE_COLON) {
-            if ($s === ',' || $s === '}') {
-                self::preventEmptryExpression($s);
-                return true;
-            }
-        
-        } else if ($prevCxt === self::JKT_COLON) {
-            if ($s === ',' || $s === '}') {
-                self::preventEmptryExpression($s);
-                return true;
-            }
-
-        } else if ($prevCxt === self::TRN) {
-            if ($s === ':') {
-                self::preventEmptryExpression($s);
-                return true;
-            }
-
-        } else if ($prevCxt === self::TRN_COLON) {
-            if (in_array($s, [',', ')', ']', '}'])) {
-                self::preventEmptryExpression($s);
-                return true;
-            }
-        }
-    
-        throw new SyntaxError('[014]Unexpected token '.$s);
-    }
-    private static function preventEmptryExpression($s) {
-        self::$expression->preventEmptryExpression(
-            "[013]Unexpected token '{$s}': missing expression before '{$s}'"
-        );
     }
 }
 
@@ -651,51 +583,60 @@ class Expression {
     private $cxt = 0;
     private $scriptPieces = [];
     private $wrapperStartIndex = -1;
-    private $wrapperDetermined = false;
-    
+    private $wrapperTrigger = null;
 
-    public static function script() {
-
+    public static function script($parentCxt = 0) {
+        
         $expression = new Expression();
-        $expression->parse();
+        $expression->parse($parentCxt);
         return $expression->assembleScriptPieces();
     }
-
-    public function preventEmptryExpression($message) {
+                    
+    public function preventEmptyExpression($stopCode) {
         if (empty($this->scriptPieces)) {
-            throw new SyntaxError($message);
+            throw new SyntaxError("[013]Unexpected token '{$stopCode}': missing expression before '{$stopCode}'");
         }
+        return true;
     }
 
     private function assembleScriptPieces() {
         return implode('', $this->scriptPieces);
     }
 
-    private function parse() {
-
+    private function parse($parentCxt) {
+        $afterCx = false;
         $prevToken = ['group'=>0, 'name'=>'', 'value'=>''];
         NameDotChain::init();
-        
-        while ($currToken = $this->nextToken()) {
+
+        for (;;) {
+            if ($this->isFinished($parentCxt, $afterCx)) {
+                break;
+            }
+
+            $afterCx = false;
+            $currToken = $this->nextToken();
+
             if ($currToken['group'] === Token::SPACE) {
                 continue;
             }
 
-            if ($this->isFinished($prevToken, $currToken)) {
-                break;
-            }
-
-            $this->normalizeTokenGroup($prevToken, $currToken);
+            $this->normalizeBI_UNARY($prevToken, $currToken);
             $this->checkTokensOrder($prevToken, $currToken);
             $this->setWrapperStartIndex($currToken);
-            $this->scriptPieces[] = $this->{'parse'.$currToken['name']}($prevToken, $currToken);
-                
-            if ($currToken['group'] & Token::CXT) {
-                $this->cxt = Cxt::get($prevToken, $currToken, $this->cxt);
-                $currToken = ['group'=> Token::OPERAND, 'name'=>'Cx', 'value'=>self::script()];
-                $this->scriptPieces[] = $currToken['value'];  
+
+            if (!in_array($currToken['name'], ['Name', 'Dot'])) {
+                NameDotChain::init();
             }
-            
+
+            $this->scriptPieces[] = $this->{'parse'.$currToken['name']}($prevToken, $currToken);
+
+            if ($currToken['group'] & Token::CXT) {
+
+                $this->cxt = Cxt::get($prevToken, $currToken, $this->cxt);
+                $this->scriptPieces[] = self::script($this->cxt);
+                $afterCx = true;
+            }
+
             $prevToken = $currToken;
         }
     }
@@ -712,27 +653,33 @@ class Expression {
         throw new SyntaxError('[013]Invalid expression: '.substr(Scripter::$userCode,0,10).' ...');
     }
 
-    private function isFinished($prevToken, $currToken) {
+    private function isFinished($parentCxt, $afterCx) {
         if (! Scripter::$userCode ) {
             throw new SyntaxError('[015]HTML file ends without Tplus closing tag "]".');
         }
         
-
         $stopCode = substr(Scripter::$userCode, 0, 1);
 
-        if (!in_array($stopCode, [')','}',']','?',':',','])) {
+        if (!in_array($stopCode, [')', '}', ']', ':', ','])) {
             return false;
         }
 
-
-        if ($this->ternaryCxt == Cxt::TRN) {
-            throw new SyntaxError('[016]missing colon in ternary operator ? : ');
+        if ($stopCode !== ':') {
+            if ($this->cxt == Cxt::TRN) {
+                throw new SyntaxError('[016]missing colon in ternary operator ? : ');
+            } else if ($this->cxt == Cxt::TRN_COLON) {
+                return true;
+            }
         }
 
-        return Cxt::isEndOf($this->cxt, $stopCode, $this);
+        if ($afterCx) {
+            return false;
+        }
+
+        return Cxt::isEndOf($parentCxt, $stopCode, $this);
     }
  
-    private function normalizeTokenGroup($prevToken, &$currToken) {
+    private function normalizeBI_UNARY($prevToken, &$currToken) {
         if ($currToken['group'] != Token::BI_UNARY) {
             return;
         }
@@ -749,15 +696,13 @@ class Expression {
             and $currToken['group'] & (Token::OPERAND|Token::UNARY) ) {
             throw new SyntaxError("[012]Unexpected {$prevToken['value']} {$currToken['value']}");
         }
-        if ((!$prevToken['group'] || $prevToken['group'] & (Token::DOT|Token::OPERATOR|Token::DELIMITER|Token::UNARY))
-            and $currToken['group'] & (Token::OPERATOR|Token::DELIMITER|Token::CLOSE) ) {
+        if ((!$prevToken['group'] || $prevToken['group'] & (Token::OPERATOR|Token::UNARY))
+            and $currToken['group'] & (Token::OPERATOR|Token::UNARY)) {
+            // @note OPEN|CLOSE|DELIMITER are checked in Cxt::isEndOf()
             throw new SyntaxError("[011]Unexpected {$prevToken['value']} {$currToken['value']}");
         }
         if ($prevToken['group'] === Token::DOT and $currToken['name'] !== 'Name') {
             throw new SyntaxError("[010]Unexpected {$prevToken['value']} {$currToken['value']}");
-        }
-        if ($prevToken['group'] === Token::UNARY and $currToken['group'] === Token::UNARY) {
-            throw new SyntaxError("[019]Unexpected {$prevToken['value']}{$currToken['value']} Unary operator chaining is not allowed.");
         }
     }
 
@@ -781,48 +726,49 @@ class Expression {
     }
 
     private function parseParenthesisOpen($prevToken, $currToken) {
-        return $currToken['value'];
+        return '(';
     }
     private function parseBraceOpen($prevToken, $currToken) {
-        return $currToken['value'];
+        return '[';
     }
     private function parseBracketOpen($prevToken, $currToken) {        
-        return $currToken['value'];
+        return '[';
     }
     private function parseTernaryIf($prevToken, $currToken) {        
-        return $currToken['value'];
+        return '?';
     }
 
     private function parseTernaryElseOrKVDelim($prevToken, $currToken) {        
         if ($this->cxt === Cxt::TRN) {
             return ':';
         }
-        if ($this->cxt & (Cxt::JCE | Cxt::JKT)) {
+        if ($this->cxt & (Cxt::JCE | Cxt::JKT | Cxt::JCE_COMMA | Cxt::JKT_COMMA )) {
             return '=>';
         }
         // @note The colon's validity has already been checked in Cxt::colon()
     }
 
     private function parseParenthesisClose($prevToken, $currToken) {
-        $this->chekcClose($currToken, Cxt::PAR|Cxt::FUN|Cxt::FUN_COMMA);
-        return $currToken['value'];
+        $this->_checkClose($currToken, Cxt::PAR|Cxt::FUN|Cxt::FUN_COMMA);
+        return ')';
     }
+    
     private function parseBraceClose($prevToken, $currToken) {
-        $this->chekcClose($currToken, Cxt::ICE|Cxt::JCE|Cxt::JCE_COMMA|Cxt::JCE_COLON);
-        return $currToken['value'];
+        $this->_checkClose($currToken, Cxt::ICE|Cxt::JCE|Cxt::JCE_COMMA|Cxt::JCE_COLON);
+        return ']';
     }
     private function parseBracketClose($prevToken, $currToken) {
-        $this->chekcClose($currToken, Cxt::IKT|Cxt::JKT|Cxt::JKT_COMMA|Cxt::JKT_COLON);
-        return $currToken['value'];
+        $this->_checkClose($currToken, Cxt::IKT|Cxt::JKT|Cxt::JKT_COMMA|Cxt::JKT_COLON);
+        return ']';
     }
-    private function checkClose($currToken, $cxt) {
+    private function _checkClose($currToken, $cxt) {
         if (!($this->cxt & $cxt)) {
             throw new SyntaxError('[006]Unexpected '.$currToken['value']);
         }
     }
 
     private function parseComma($prevToken, $currToken) {
-        return $currToken['value'];
+        return ',';
     }
  
     private function parseNumber($prevToken, $currToken) {
@@ -831,11 +777,11 @@ class Expression {
 
     private function parseQuoted($prevToken, $currToken) {
         if ($prevToken['group']===Token::UNARY) {
-            // @policy: String literal cannot follows unary operators.            
+            //@policy  String literal cannot follows unary operators.            
             throw new SyntaxError('[001]Unexpected '.$currToken['value']);
         }
         if ($prevToken['name'] == 'Plus') {
-            // @policy: Plus operator before string literal is changed to concat operator.
+            //@policy  Plus operator before string literal is changed to concat operator.
             array_pop( $this->scriptPieces );
             array_push($this->scriptPieces, '.');
         }
@@ -860,13 +806,13 @@ class Expression {
         return $currToken['value'];  // === == !== != < > <= >=     @todo check a == b == c
     }
     private function parseLogic($prevToken, $currToken) {
-        return $currToken['value'];  // && \\
+        return $currToken['value'];  // && ||
     }
     private function parseElvis($prevToken, $currToken) {
         return $currToken['value'];  // ?: ??
     }
     private function parseArithOrBit($prevToken, $currToken) {
-        return $currToken['value'];  // % * / & ^ << >>              @todo check if operand is string
+        return $currToken['value'];  // % * / & ^ << >>             @todo check if operand is string
     }
 
     private function parseDot($prevToken, $currToken) {
@@ -874,17 +820,18 @@ class Expression {
         if ($prevToken['group']===Token::CLOSE
             or $prevToken['group']===Token::OPERAND && $prevToken['name']!=='Name') {
 
-            $this->wrapperDetermined = true;
+            $this->wrapperTrigger = $prevToken['name'];
             return;
         }
 
         NameDotChain::addDot($currToken['value']);
     }
     private function parseName($prevToken, $currToken) { // variable, function, object, method, array, key, namespace, class
-        if ($this->wrapperDetermined) {
-            NameDotChain::confirmWrapper($currToken['value']);
+
+        if ($this->wrapperTrigger) {
+            NameDotChain::confirmWrapper($currToken['value'], $this->wrapperTrigger=='Name');
             $this->insertValWrapper();
-            $this->wrapperDetermined = false;
+            $this->wrapperTrigger = null;
             return ')->'.$currToken['value'];
         }
 
@@ -901,13 +848,14 @@ class NameDotChain {
     public static function init() {
         self::$tokens = [];
         self::$names = [];
+        self::$expression = null;
     }
 
-    public static function confirmWrapper($name) {
+    public static function confirmWrapper($name, $onlyWrapper) {
         if (!self::isFunc()) {
             throw new SyntaxError("[007]unexpected {$name}");
         }
-        if (!self::isWrapper()) {
+        if ($onlyWrapper and !self::isWrapper($name)) {
             throw new SyntaxError("[007]Wrapper method {$name}() not found in class ".Scripter::$valWrapper);
         }
     }
@@ -919,6 +867,8 @@ class NameDotChain {
         self::$tokens[] = $token;
     }
     public static function addName($token, $expression) {
+
+        self::$expression = $expression;
         if (in_array($token, ['true', 'false', 'null', 'this'])) {
             if (!self::isEmpty() or self::isFunc()) {
                 throw new SyntaxError("[021]'{$token}' is reserved word.");
@@ -933,17 +883,15 @@ class NameDotChain {
 
         self::$tokens[] = $token;
         self::$names[] = $token;
-
-        self::$expression = $expression;
-
+        
         if (self::isNextDot()) { // chain not ends.
             return;
         }
-
+        
         if (preg_match('/\.+/', self::$tokens[0])) {
             return self::parseLoopMember();
         }
-
+        
         if ('this' == self::$names[0]) {
             return self::parseThis();
         }
@@ -955,6 +903,7 @@ class NameDotChain {
         if ($script = self::parseStatic()) {
             return $script;
         }
+        
         return self::parseArray(self::$names);
     }
 
@@ -973,10 +922,8 @@ class NameDotChain {
 
     private static function parseAutoGlobals() {
 
-        $names = self::$names;
-        
+        $names = self::$names;        
         $global = array_shift($names);
-
         $method = self::isFunc() ? array_pop($names) : null;
 
         if ($global === 'GLOBALS') {
@@ -990,33 +937,31 @@ class NameDotChain {
 
         } else {    // GET SERVER COOKIE SESSION
             if (count($names) !== 1) { 
-                //@note when code is GET.keword.esc(), count($names) must be 1.
+                // when code is GET.keword.esc(), count($names) must be 1.
                 throw new SyntaxError('[024]Unexpected auto-global usage: '.implode('', self::$tokens));
             }
             $script = '$_'.$global.'["'.$names[0].'"]';
         } 
         
-        self::init();
-
         return $method
-            ? self::wrapIfNeeded($script, $method)
+            ? self::wrapIfNeeded($script, $method, true)
             : $script;
     }
     
     private static function parseThis() {
         $names = self::$names;
-        self::init();
 
         if (! self::isFunc() ) {
             if (count($names) === 1) {
                 return '$this';
             }
-            throw new SyntaxError('[025]access to object property is not allowd. 1'); // this.prop
+            throw new SyntaxError('[025]access to object property is not allowd.'); // this.prop
         }
-        if (count($names) !== 2) {
-            throw new SyntaxError('[026]access to object property is not allowd. 2');  // this.prop.foo
+        $method = array_pop($names);
+        if (count($names) !== 1) {
+            throw new SyntaxError('[026]access to object property is not allowd.');  // this.prop.foo()
         }
-        return '$this->'.$names[1];     // this.method()
+        return '$this->'.$method;     // this.method()
     }
 
 
@@ -1044,7 +989,6 @@ class NameDotChain {
             if (self::isFunc()) {
                 throw new SyntaxError('[028]Unexpected '.implode('', self::$tokens).'("');
             }
-            self::init();
             return Statement::loopName($loopDepth, $names[0]);
         }
         if (count($names)===2 and self::isFunc()) {
@@ -1055,7 +999,6 @@ class NameDotChain {
 
             self::$expression->insertValWrapper();
 
-            self::init();
             return Statement::loopName($loopDepth, $names[0]).')->'.$names[1];
         }
         //@note i,s and k cannot be array and so cannot have element.
@@ -1071,7 +1014,6 @@ class NameDotChain {
         }
         ['a'=>$a, 'i'=>$i, 's'=>$s, 'k'=>$k, 'v'=>$v] = Statement::loopNames($loopDepth);
         
-        self::init();
         return Scripter::$loopHelper.'::_o('.$i.','.$s.','.$k.','.$v.')->'.$names[1];
     }
     private static function _parseV($names, $loopDepth) {
@@ -1086,7 +1028,6 @@ class NameDotChain {
             $script .= '["'. $name.'"]';
         }
 
-        self::init();
         return $method
             ? self::wrapIfNeeded($script, $method)
             : $script;
@@ -1095,7 +1036,7 @@ class NameDotChain {
 
     private static function parseStatic() {
         if (self::isFunc()) {
-            if (count(self::names)===1) {
+            if (count(self::$names)===1) {
                 return self::_parseFunc();
             }
             
@@ -1103,7 +1044,7 @@ class NameDotChain {
                 return $script;
             }
 
-            $names = self::names;
+            $names = self::$names;
             $func = array_pop($names);
             $path = '';
             foreach ($names as $name) {
@@ -1112,22 +1053,21 @@ class NameDotChain {
             if (class_exists($path)) {
                 return self::_parseStaticMethod($path, $func);
             }
-            return self::_parseNsFuncOrDynamicWithWrapper($names, $path, $func);
+            return self::_parseNsFuncOrArrayWithWrapper($names, $path, $func);
         }
-        return self::_parseConst(self::names);
+        return self::_parseConst(self::$names);
     }
  
     private static function _parseFunc() {
-        $func = '\\'.self::names[0];
+        $func = self::$names[0];
         if (!function_exists($func) and !in_array($func,['isset','empty'])) {
             throw new SyntaxError("[034]function `{$func}()` is not defined.");
         }
-        self::init();
         return $func;
     }
 
     private static function _parseConstWithWrapperFunc() {
-        $names = self::names;
+        $names = self::$names;
         $func = array_pop($names);
         $script = self::_parseConst($names);
 
@@ -1143,12 +1083,12 @@ class NameDotChain {
         if (!method_exists($class, $method)) {
             throw new FatalError("[035]Static method `{$script}()` not found.");
         }
-        self::init();
         return $script;
     }
   
-    private static function _parseNsFuncOrDynamicWithWrapper($names, $path, $func) {
-        $script = $path.$func;
+    private static function _parseNsFuncOrArrayWithWrapper($names, $path, $func) {
+        $script = $path.'\\'.$func;
+        
         if (function_exists($script)) {
             return $script;
         }
@@ -1159,12 +1099,10 @@ class NameDotChain {
     private static function parseArray($names, $func=null) {
         $script = '$V';
         foreach ($names as $name) {
-            $script .= '["'.$name.'"]';
+            $script .= "['{$name}']";
         }
-
-        self::init();
         return $func
-            ? self::wrapIfNeeded($script, $func, true)
+            ? self::wrapIfNeeded($script, $func)
             : $script;
     }
 
@@ -1175,20 +1113,20 @@ class NameDotChain {
             return $script . ')->' . $method;
         }
         if ($onlyWrapper) {
-            throw new FatalError("[023]Wrapper method `{$method}` not found in `".implode('', self::$tokens)."`");    
+            throw new FatalError("[023]Wrapper method `".Scripter::$valWrapper."::{$method}()` not found in `".implode('', self::$tokens)."`");    
         }
         return $script . '->' . $method;
     }
 
     private static function _parseConst($names) {
-        $ns = '\\';
+        $path = '';
         $constName = null;
-        foreach ($names as $name) {
+        while ($name = array_shift($names)) {
             if (self::_constName($name)) {
                 $constName = $name;
                 break;
             } else {
-                $ns = $name.'\\';
+                $path .= '\\'.$name;
             }
         }
         
@@ -1196,228 +1134,29 @@ class NameDotChain {
             return false;
         }
 
-        $script = $ns.$constName;
+        if ($path and class_exists($path)) {
+            $script = $path ? $path.'::'.$constName : '\\'.$constName ;
+            if (!defined($script)) {
+                throw new FatalError("[040]Constant `{$script}` not found.");    
+            }
+        } else {
+            $script = $path.'\\'.$constName;
+            if (!defined($script)) {
+                throw new FatalError("[038]Constant `{$script}` not found.");
+            }
+        }
+
         foreach ($names as $name) {
             if (self::_constName($name)) {
                 throw new SyntaxError('[037]Unexpected constant usage: '.implode('', self::$tokens));    
             }
-            $script .= "[{$name}]";
-        }
-        if (!defined($script)) {
-            throw new FatalError("[038]Constant `{$script}` not found.");
+            $script .= "['{$name}']";
         }
 
         return $script;
     }
-
-
-
-/*    private static function _parseNsFuncOrStaticMethod() {
-        $names = self::names;
-        $func = array_pop($names);
-        $path = '';
-        foreach ($names as $name) {
-            $path .= '\\'.$name;
-        }
-        if (class_exists($path)) {
-            return self::_parseStaticMethod($path, $func);
-        }
-        return self::_parseNsFuncOrDynamicWithWrapper($path, $func);
-    }*/
-    
-    
-    /*private static function checkFuncName($name) {
-        if (self::isConstantName($func)) { //@
-            throw new SyntaxError("[032]function {$func}() has constant name.");
-        }
-    }*/
-
-    private static function parseFunction___() {
-        // 1. function
-        if (count(self::$names) === 1) {
-            $func = self::$names[0];
-            self::checkFuncName($func);
-            if (!function_exists($func) and !in_array($func,['isset','empty'])) {
-                throw new SyntaxError("[]function {$func}() is not defined.");
-            }
-            self::init();
-            return $func;
-        }
-
-        // 2
-        $names = self::names;
-        $method = array_pop($names);
-        self::checkFuncName($method);
-        $script = self::parseVariable($names);
-        return self::wrapIfNeeded($script ,$func);
-
-     
-
-        $frontNames = [];
-        $backNames  = self::$names;
-        while ($name = array_shift($backNames)) {
-            $frontNames[] = $name;
-            if (self::isConstantName($name)) {
-                $method = self::isFunc() ? array_pop($backNames) : null;
-                $constExpr = self::parseConstantChain($frontNames, $backNames);
-                self::init();
-                return $method
-                    ? self::wrapIfNeeded($constExpr, $method)
-                    : $constExpr;
-            }
-        }
-        // 3. function in namespace  or  method  or  wrapper method
-        /*$names = self::$names;
-        foreach($names as $name) {      // @ 상수에도 래퍼를 붙일 수 있다. 정정 필요
-            if (self::isConstantName($name)) {
-                throw new SyntaxError(implode('', self::$tokens).'() has constant name.');
-            }
-        }*/
-
-        //$func  = array_pop($names);
-        $name  = array_pop($names);
-        $namespaces = empty($names) ? '' : '\\'.implode('\\', $names);
-
-        // 3.1. namespace\functions
-        $namespace = $name;
-        $fullFunction = $namespaces.'\\'.$namespace.'\\'.$func;
-        if (function_exists($fullFunction)) {
-            self::init();
-            return $fullFunction;
-        }
-
-        // 3.2. namespace\class::method
-        if (self::isClassName($name)) {
-            $class = $name;
-            $fullClass = $namespaces.'\\'.$class;
-            if (!class_exists($fullClass)) {
-                throw new FatalError($fullClass.' does not exist');
-            }
-            if (!method_exists($fullClass, $func)) {
-                throw new FatalError('static method '.$func.'() does not exist in '.$fullClass);
-            }
-            self::init();
-            return $fullClass.'::'.$func;
-        } 
-
-        // 4. dynamic method
-        $script = '$V';
-        $names = self::$names;
-        $method = array_pop($names);
-        
-        while ($name = array_shift($names)) {
-            $script .= '["'.$name.'"]';
-        }
-
-        self::init();
-        // 4.1. wrapper method
-        if (in_array($method, Scripter::valWrapperMethods())) {
-            self::$expression->insertValWrapper();
-            return $script.')->'.$method;
-        }
-        // 4.2. object method
-        return $script.'->'.$method;
-    }
-
-    private static function parseVariable($names) {
-        $backnames = $names;
-        $frontNames = [];
-        while ($name = array_shift($$backnames)) {
-            $frontNames[] = $name;
-            if (self::isConstantName($name)) {
-                self::init();
-                return self::parseConstantChain($frontNames, $backnames);
-            }
-        }
-
-        //$names = self::$names;
-        $var = '$V';
-        foreach ($names as $name) {
-            $var .= '["'.$name.'"]';
-        }
-        self::init();
-        return $var;
-    }
-
-    private static function parseConstantChain($frontNames, $backNames) {
-        $constant = array_pop($frontNames);
-        $path = '';
-        foreach($frontNames as $name) {
-            $path .= '\\'.$name;
-        }
-        if (defined($path.'\\'.$constant)) {
-            return self::constantChain($path.'\\'.$constant, $backNames);
-        } 
-        if ($path and defined($path.'::'.$constant)) {
-            return self::constantChain($path.'::'.$constant, $backNames);
-        }
-        throw new FatalError(
-            empty($path)
-            ? 'constant "'.$constant.'" is not defined.'
-            : 'Neither '.$path.'\\'.$constant.' nor '.$path.'::'.$constant.' is defined.'
-        );
-    }
-    private static function constantChain($constant, $backNames) {
-        $constantChain = $constant;
-        foreach($backNames as $name) {
-            if (self::isConstantName($name)) {
-                $constantChain .= '['.$name.']';
-            } else {
-                $constantChain .= '["'.$name.'"]';
-            }
-        }
-        return $constantChain;
-    }
-    private static function isConstantName($name) {
+    private static function _constName($name) {
         return preg_match('/^[A-Z][A-Z0-9_]*$/', $name);
-        //return preg_match('/\p{Lu}/u', $name) and !preg_match('/\p{Ll}/u', $name);
-    }
-
-    private static function isClassName($name) {
-        return preg_match('/^[A-Z]/', $name) and preg_match('/[a-z]/u', $name);
-        //return preg_match('/^\p{Lu}/u', $name) and preg_match('/\p{Ll}/u', $name);
     }
 }
 
-/*
-
-\func()
-\Class::staticMethod()
-\NS\func()
-\NS\Class::staticMethod()
-
-\CONST
-\ARR_CONST['key']
-\NS\CONST
-\NS\ARR_CONST['key']
-\Class::CONST
-\Class::ARR_CONST['key']
-\NS\Class::CONST
-\NS\Class::ARR_CONST['key']
-
-variable
-arr.variable
-
-NS 반복가능
-ARR_CONST['key'] 에서 ['key'] 반복가능
-arr.variable arr. 반복가능..
-
-그리고 모든 경우에 래퍼붙을 수 있음..
-
-
-
-foo().bar() 여기서 bar() 는 다음 번 NameDotChain 호출시에 처리되고..
-
-\CONST['a']['b']         <--       [=CONST.a.b]
-\Class::CONST['x']['y']  <--       [=Class.CONST.a.b]  특이사항 없어보이고
-
-
-arr.variable[blah blah].other   ...... 여기서 other 는 지원하지 않아요...  .other() 래퍼만 붙일 수 있습니다.
-
-foo().bar  -------- 이것도 지원하지 않아요.. bar() 래퍼만 붙일 수 있습니다. 지원하는게 좋을까요...
-
-
-그리고 보니까.. parseFunction() / parseVariable() 로 나눴었는데
-뭔가 느낌적인 느낌이..  parseStatic() / parseDynmic() 이렇게 구분하는게 쓸모가 있어보여요..
-
-*/

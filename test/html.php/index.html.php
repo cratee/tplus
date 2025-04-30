@@ -1,4 +1,4 @@
-<?php /* Tplus 1.0.4 2025-02-14 15:50:11 D:\Work\Tplus\test\html\index.html 000007916 */ ?>
+<?php /* Tplus 1.0.5 2025-05-01 00:26:51 D:\Work\Tplus\test\html\index.html 000008003 */ ?>
 <html>
 <head>
     <title>welcome!</title>
@@ -8,9 +8,8 @@
 </head>
 <body>
 
-
+111
 <table>
-
 
 
 
@@ -27,7 +26,7 @@
 </tr>
 <tr>
 	<td>7.</td>
-	<td><?= $V["foo"] ?> <?= bar() ?></td>
+	<td><?= $V['foo'] ?> <?= bar() ?></td>
 	<td>hello~ good good</td>
 </tr>
 <tr>
@@ -54,7 +53,7 @@
 	<td>9.2.1.</td>
 	<td>
 		<ul>
-			<?php $L1=$V["country"];if (is_array($L1) and !empty($L1)) {$L1s=count($L1);$L1i=-1;foreach($L1 as $L1k=>$L1v) { ++$L1i; ?>
+			<?php $L1=$V['country'];if (is_array($L1) and !empty($L1)) {$L1s=count($L1);$L1i=-1;foreach($L1 as $L1k=>$L1v) { ++$L1i; ?>
 			<li>
 				<?= $L1v["name"] ?> <?= $L1v["pop"] ?> million
 				<ul>
@@ -97,8 +96,8 @@
 <tr>
 	<td>9.2.2.</td>
 	<td>
-	<?php $L1=$V["foo1"];if (is_array($L1) and !empty($L1)) {$L1s=count($L1);$L1i=-1;foreach($L1 as $L1k=>$L1v) { ++$L1i; ?>
-		<?php $L2=$V["bar1"];if (is_array($L2) and !empty($L2)) {$L2s=count($L2);$L2i=-1;foreach($L2 as $L2k=>$L2v) { ++$L2i; ?>		
+	<?php $L1=$V['foo1'];if (is_array($L1) and !empty($L1)) {$L1s=count($L1);$L1i=-1;foreach($L1 as $L1k=>$L1v) { ++$L1i; ?>
+		<?php $L2=$V['bar1'];if (is_array($L2) and !empty($L2)) {$L2s=count($L2);$L2i=-1;foreach($L2 as $L2k=>$L2v) { ++$L2i; ?>		
 			<?= $L1v ?> x <?= $L2v ?> = <?= $L1v*$L2v ?> <br/>
 		<?php }} ?>
 	<?php }} ?>
@@ -136,7 +135,7 @@
 	<td>10.2.1.</td>
 	<td>
 	<?php $L1=['apple','banana',123=>'cherry'];if (is_array($L1) and !empty($L1)) {$L1s=count($L1);$L1i=-1;foreach($L1 as $L1k=>$L1v) { ++$L1i; ?>
-		<?= $L1s -$L1i ?>. <?= $L1k ?>: <?= $L1v ?> <br/>
+		<?= $L1s-$L1i ?>. <?= $L1k ?>: <?= $L1v ?> <br/>
 	<?php }} ?>
 	</td>
 	<td>
@@ -167,7 +166,7 @@
 <tr>
 	<td>11.</td>
 	<td>
-		<?= $V["fooo"][3] ?> <?= $V["fooo"][3] ?>
+		<?= $V['fooo'][3] ?> <?= $V['fooo'][3] ?>
 	</td>
 	<td>
 		4 4	
@@ -176,8 +175,8 @@
 <tr>
 	<td>12.1.</td>
 	<td>
-	<?= $V["xx"]->bar() ?><br>
-	<?= $V["yy"]["baz"] ?>
+	<?= $V['xx']->bar() ?><br>
+	<?= $V['yy']['baz'] ?>
 	</td>
 	<td>
 	return from method.<br>
@@ -187,7 +186,7 @@
 <tr>
 	<td>12.2.</td>
 	<td>
-	<?= \TplValWrapper::_o($V["zz"]->baz())->bar() ?>
+	<?= \TplValWrapper::_o($V['zz']->baz())->bar() ?>
 	</td>
 	<td>
 	return from method.	
@@ -197,7 +196,7 @@
 	<td>12.3.</td>
 	<td>
 	
-	<?php $L1=$V["product"];if (is_array($L1) and !empty($L1)) {$L1s=count($L1);$L1i=-1;foreach($L1 as $L1k=>$L1v) { ++$L1i; ?>
+	<?php $L1=$V['product'];if (is_array($L1) and !empty($L1)) {$L1s=count($L1);$L1i=-1;foreach($L1 as $L1k=>$L1v) { ++$L1i; ?>
 		<?= $L1v->code() ?> <?= $L1v->name() ?> <?= $L1v->price() ?><br/>
 	<?php }} ?>
 
@@ -211,7 +210,7 @@
 <tr>
 	<td>13.1.1.</td>
 	<td>
-		<?= \MY_CONST ?>
+		<?= \MY_CONST ?> 
 	</td>
 	<td>
 		111
@@ -248,7 +247,7 @@
 	<td>13.3.</td>
 	<td>
 	<?= \Widget\Calender::draw() ?><br/>
-	<?= \Widget\Calender::MONTH["march"] ?><br/>
+	<?= \Widget\Calender::MONTH['march'] ?><br/>
 	</td>
 	<td>
 	달력위젯이 그림<br/>
@@ -266,7 +265,6 @@
 
 	</td>
 </tr>
-
 <tr>
 	<td>14.1.2.</td>
 	<td>
@@ -280,7 +278,7 @@
 <tr>
 	<td>14.2.1</td>
 	<td>
-	<?= $this->fetch($V["sub"]) ?>
+	<?= $this->fetch($V['sub']) ?>
 	</td>
 	<td>
 	<div>4 4</div>
@@ -289,7 +287,7 @@
 <tr>
 	<td>14.2.2</td>
 	<td>
-	<?= $V["sub2"] ?>
+	<?= $V['sub2'] ?>
 	</td>
 	<td>
 	<div>11 11</div>
@@ -300,12 +298,12 @@
 <tr>
 	<td>15.</td>
 	<td>
-	<?php if ($V["foo2"]) { ?><?= $V["bar2"] ?><?php } else { ?>baz<?php } ?><br/>
-	<?= $V["foo2"]?$V["bar3"]:"baz" ?><br/>
-	<?= $V["foo"]?:"bar" ?><br/>
-	<?= $V["foo3"]??"bar" ?><br/>
-	<?= $V["foo3"]?:bar()?:"baz" ?><br/>
-	<?= $V["foo"]?($V["bar"]?'foobar':'foo'):'no' ?>
+	<?php if ($V['foo2']) { ?><?= $V['bar2'] ?><?php } else { ?>baz<?php } ?><br/>
+	<?= $V['foo2']?$V['bar3']:"baz" ?><br/>
+	<?= $V['foo']?:"bar" ?><br/>
+	<?= $V['foo3']??"bar" ?><br/>
+	<?= $V['foo3']?:bar()?:"baz" ?><br/>
+	<?= $V['foo']?($V['bar']?'foobar':'foo'):'no' ?>
 	</td>
 	<td>
 	Tplus if	<br/>
@@ -326,7 +324,7 @@
 		<?= $this->assign(['foo'=>123]) ?>					
 		<?= $this->assign(['foo'=>456,'bar'=>'bbb']) ?>	
 	
-		<?= $V["foo"] ?> <?= $V["bar"] ?>
+		<?= $V['foo'] ?> <?= $V['bar'] ?>
 	
 	</td>
 	<td>
@@ -338,7 +336,7 @@
 	<td>19.</td>
 	<td>
 
-		<?= ucfirst($V["bar"]."baz".$V["caz"]) ?>
+		<?= ucfirst($V['bar']."baz".$V['caz']) ?>
 	</td>
 	<td>
 		Bbbbazzzz
@@ -355,9 +353,9 @@
 		foo empty
 	<?php } ?>
 <br/>
-<?php if ($V["fruit"]=='apple'||$V["fruit"]=='cherry') { ?>
+<?php if ($V['fruit']=='apple'||$V['fruit']=='cherry') { ?>
 	red
-<?php } else if ($V["fruit"]=='blueberry'||$V["pants"]=='jeans') { ?>
+<?php } else if ($V['fruit']=='blueberry'||$V['pants']=='jeans') { ?>
 	blue
 <?php } else { ?>
 	unkown
@@ -382,9 +380,9 @@
 
 	<?= \TplValWrapper::_o(\TplValWrapper::_o("abcde")->toUpper())->substr(1,3) ?> <br/>
 
-	<?= \TplValWrapper::_o(\TplValWrapper::_o($V["article"])->esc())->nl2br() ?> <br/>
+	<?= \TplValWrapper::_o(\TplValWrapper::_o($V['article'])->esc())->nl2br() ?> <br/>
 
-<?php $L1=$V["product"];if (is_array($L1) and !empty($L1)) {$L1s=count($L1);$L1i=-1;foreach($L1 as $L1k=>$L1v) { ++$L1i; ?>
+<?php $L1=$V['product'];if (is_array($L1) and !empty($L1)) {$L1s=count($L1);$L1i=-1;foreach($L1 as $L1k=>$L1v) { ++$L1i; ?>
 	<?= $L1v->code() ?> <?= \TplValWrapper::_o(\TplValWrapper::_o($L1v->name())->substr(0,3))->ucfirst() ?> <?= $L1v->price() ?><br/>
 <?php }} ?>
 
@@ -427,16 +425,16 @@
 
 <br/>
 <br/>
-[=SERVER.PHP_SELF]:  <?= $_SERVER["PHP_SELF"] ?> 
+[=SERVER.PHP_SELF.toUpper()]:  <?= \TplValWrapper::_o($_SERVER["PHP_SELF"])->toUpper() ?> 
 <br/>
 <br/>
-[=GLOBALS.me]:  <?= $GLOBALS["me"] ?> 
+[=GLOBALS.me.substr(0,5)]:  <?= \TplValWrapper::_o($GLOBALS["me"])->substr(0,5) ?> 
 <br/>
 <br/>
 
 [:CSS][/]
-<?php if (isset($V["view"])) { ?>
-<p><?= $V["view"]["seq"] ?></p>
+<?php if (isset($V['view'])) { ?>
+<p><?= $V['view']['seq'] ?></p>
 <?php } else { ?>
 <p>isset() empty()</p>
 <?php } ?>
