@@ -1,4 +1,4 @@
-<?php /* Tplus 1.0.5 2025-05-01 00:26:51 D:\Work\Tplus\test\html\index.html 000008003 */ ?>
+<?php /* Tplus 1.0.5 2025-05-01 17:55:41 D:\Work\Tplus\test\html\index.html 000008254 */ ?>
 <html>
 <head>
     <title>welcome!</title>
@@ -8,7 +8,6 @@
 </head>
 <body>
 
-111
 <table>
 
 
@@ -405,7 +404,6 @@
 	<td>22.</td>
 	
 	<td>
-
 	<?php $L1=['apple','banana','cherry'];if (is_array($L1) and !empty($L1)) {$L1s=count($L1);$L1i=-1;foreach($L1 as $L1k=>$L1v) { ++$L1i; ?>
 		<?= $L1i ?>: <?= $L1v ?>:
 		<?= \TplLoopHelper::_o($L1i,$L1s,$L1k,$L1v)->isEven()?"even":"odd" ?> <?php if (\TplLoopHelper::_o($L1i,$L1s,$L1k,$L1v)->isLast()) { ?>--Last<?php } ?><br/>
@@ -425,19 +423,29 @@
 
 <br/>
 <br/>
+[=SERVER.PHP_SELF]: <?= $_SERVER["PHP_SELF"] ?><br/>
 [=SERVER.PHP_SELF.toUpper()]:  <?= \TplValWrapper::_o($_SERVER["PHP_SELF"])->toUpper() ?> 
 <br/>
 <br/>
+[=GLOBALS.me]:  <?= $GLOBALS["me"] ?> <br/>
 [=GLOBALS.me.substr(0,5)]:  <?= \TplValWrapper::_o($GLOBALS["me"])->substr(0,5) ?> 
 <br/>
 <br/>
-
+<?php if (isset($_GET["keyword"])) { ?>
+	<?= $_GET["keyword"] ?><?= \TplValWrapper::_o($_GET["keyword"])->esc() ?>
+<?php } ?>
+<br/>
+[/][:]
+<br/>
 [:CSS][/]
 <?php if (isset($V['view'])) { ?>
-<p><?= $V['view']['seq'] ?></p>
+	<p><?= $V['view']['seq'] ?></p>
 <?php } else { ?>
-<p>isset() empty()</p>
-<?php } ?>
+	<p>isset() empty()</p>
+<?php } ?></br>
+
+
+</br>
 
 
 </body>

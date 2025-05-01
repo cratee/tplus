@@ -414,7 +414,6 @@
 	<td>22.</td>
 	
 	<td>
-
 	[@ {'apple', 'banana', 'cherry'}]
 		[=.i]: [=.v]:
 		[=.h.isEven() ? "even" : "odd"] [?.h.isLast()]--Last[/]<br/>
@@ -434,19 +433,29 @@
 
 <br/>
 <br/>
+[\=SERVER.PHP_SELF]: [=SERVER.PHP_SELF]<br/>
 [\=SERVER.PHP_SELF.toUpper()]:  [=SERVER.PHP_SELF.toUpper()] 
 <br/>
 <br/>
+[\=GLOBALS.me]:  [=GLOBALS.me] <br/>
 [\=GLOBALS.me.substr(0,5)]:  [=GLOBALS.me.substr(0,5)] 
 <br/>
 <br/>
-
+[? isset(GET.keyword)]
+	[=GET.keyword][=GET.keyword.esc()]
+[/]
+<br/>
+[/][:]
+<br/>
 [:CSS][/]
 [? isset(view)]
-<p>[=view.seq]</p>
+	<p>[=view.seq]</p>
 [:]
-<p>isset() empty()</p>
-[/]
+	<p>isset() empty()</p>
+[/]</br>
+
+
+</br>
 
 
 </body>

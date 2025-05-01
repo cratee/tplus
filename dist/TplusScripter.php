@@ -35,7 +35,6 @@ class Scripter {
     
     private static $currentLine = 1;
 
-    public static $wrapper;
     public static $valWrapper;
     public static $loopHelper;
     public static $userCode;
@@ -856,13 +855,13 @@ class NameDotChain {
             throw new SyntaxError("[007]unexpected {$name}");
         }
         if ($onlyWrapper and !self::isWrapper($name)) {
-            throw new SyntaxError("[007]Wrapper method {$name}() not found in class ".Scripter::$valWrapper);
+            throw new SyntaxError("[041]Wrapper method {$name}() not found in class ".Scripter::$valWrapper);
         }
     }
 
     public static function addDot($token) {
         if (!self::isEmpty() and strlen($token) > 1) { //  multiple dots after Name. e.g) 'abc..' 'xyz...'
-            throw new SyntaxError('[008]Unexpected '.implode('', self::$tokens).$token);
+            throw new SyntaxError('[008]Unexpected consecutive dots in expression: '.implode('', self::$tokens).$token);
         }
         self::$tokens[] = $token;
     }
