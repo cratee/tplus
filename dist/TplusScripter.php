@@ -502,7 +502,7 @@ class Cxt {		// Child Expression Trigger
 	const TRN_COLON = 1<<12;
 
     
-    private static array $expressionEndMap = [
+    private static $expressionEndMap = [
         self::FUN         => ['end' => [')'],             'check' => [',']],
         self::JKT         => ['end' => [']'],             'check' => [':', ',']],
         self::JCE         => ['end' => ['}'],             'check' => [':', ',']],
