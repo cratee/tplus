@@ -524,6 +524,7 @@ class Cxt {		// Child Expression Trigger
         }
 
         $map = self::$expressionEndMap[$parentCxt] ?? null;
+        //@note `)` in [= a?b:c )] --> $map == null  after TRN_COLON expression stopped.
 
         if (!empty($map['end']) and in_array($stopCode, $map['end'])) {
             return true;
@@ -533,7 +534,7 @@ class Cxt {		// Child Expression Trigger
             return $expession->preventEmptyExpression($stopCode);
         }
 
-        throw new SyntaxError('[014]Unexpected token '.$stopCode);
+        throw new SyntaxError("[014]Unexpected token `{$stopCode}`");
     }
 
     public static function get($prevToken, $currToken, $cxt) {
@@ -556,7 +557,7 @@ class Cxt {		// Child Expression Trigger
             case self::JCE_COLON : return self::JCE_COMMA;
             case self::JKT_COLON : return self::JKT_COMMA;
         }
-        throw new SyntaxError('[018]Invalid token: ","');
+        throw new SyntaxError('[018]Invalid token: `,`'); // This should never be reached. Token `,` already validated by isEndOf().
     }
     private static function colon($cxt) {
         switch ($cxt) {
@@ -566,14 +567,14 @@ class Cxt {		// Child Expression Trigger
             case self::JCE_COMMA : return self::JCE_COLON;
             case self::JKT_COMMA : return self::JKT_COLON;
         }
-        throw new SyntaxError('[017]Invalid token: ":"');
+        throw new SyntaxError('[017]Invalid token: `:`'); // This should never be reached. Token `:` already validated by isEndOf().
     }
     private static function ternary($prevToken, $currToken, $cxt) {
         if ($prevToken['group'] & (Token::OPERAND | Token::CLOSE) 
             and !($cxt & (self::TRN | self::TRN_COLON))) {
             return self::TRN;
         }
-        throw new SyntaxError('[016]Invalid token: "?"');
+        throw new SyntaxError('[016]Invalid token: `?`');
     }
 }
 
@@ -593,7 +594,7 @@ class Expression {
                     
     public function preventEmptyExpression($stopCode) {
         if (empty($this->scriptPieces)) {
-            throw new SyntaxError("[013]Unexpected token '{$stopCode}': missing expression before '{$stopCode}'");
+            throw new SyntaxError("[013]Unexpected token `{$stopCode}`:  missing expression before `{$stopCode}`");
         }
         return true;
     }
@@ -654,7 +655,7 @@ class Expression {
 
     private function isFinished($parentCxt, $afterCx) {
         if (! Scripter::$userCode ) {
-            throw new SyntaxError('[015]HTML file ends without Tplus closing tag "]".');
+            throw new SyntaxError('[015]HTML file ends without Tplus closing tag `]`');
         }
         
         $stopCode = substr(Scripter::$userCode, 0, 1);
@@ -737,6 +738,19 @@ class Expression {
         return '?';
     }
 
+    // @note stopCodes )}]:, have already been checked in Cxt::isEndOf()
+    private function parseParenthesisClose($prevToken, $currToken) {
+        return ')';
+    }
+    private function parseBraceClose($prevToken, $currToken) {
+        return ']';
+    }
+    private function parseBracketClose($prevToken, $currToken) {
+        return ']';
+    }
+    private function parseComma($prevToken, $currToken) {
+        return ',';
+    }
     private function parseTernaryElseOrKVDelim($prevToken, $currToken) {        
         if ($this->cxt === Cxt::TRN) {
             return ':';
@@ -744,32 +758,8 @@ class Expression {
         if ($this->cxt & (Cxt::JCE | Cxt::JKT | Cxt::JCE_COMMA | Cxt::JKT_COMMA )) {
             return '=>';
         }
-        // @note The colon's validity has already been checked in Cxt::colon()
     }
 
-    private function parseParenthesisClose($prevToken, $currToken) {
-        $this->_checkClose($currToken, Cxt::PAR|Cxt::FUN|Cxt::FUN_COMMA);
-        return ')';
-    }
-    
-    private function parseBraceClose($prevToken, $currToken) {
-        $this->_checkClose($currToken, Cxt::ICE|Cxt::JCE|Cxt::JCE_COMMA|Cxt::JCE_COLON);
-        return ']';
-    }
-    private function parseBracketClose($prevToken, $currToken) {
-        $this->_checkClose($currToken, Cxt::IKT|Cxt::JKT|Cxt::JKT_COMMA|Cxt::JKT_COLON);
-        return ']';
-    }
-    private function _checkClose($currToken, $cxt) {
-        if (!($this->cxt & $cxt)) {
-            throw new SyntaxError('[006]Unexpected '.$currToken['value']);
-        }
-    }
-
-    private function parseComma($prevToken, $currToken) {
-        return ',';
-    }
- 
     private function parseNumber($prevToken, $currToken) {
         return $currToken['value'];
     }
@@ -786,11 +776,6 @@ class Expression {
         }
         return $currToken['value'];
     }
-
-    private function parseUnary($prevToken, $currToken) {
-        return $currToken['value'];
-    }
-
     private function parsePlus($prevToken, $currToken) {
         return ($prevToken['name'] == 'Quoted') ? '.' : ' +';
     }
@@ -798,6 +783,10 @@ class Expression {
         return $currToken['value'];
     }
 
+    
+    private function parseUnary($prevToken, $currToken) {
+        return $currToken['value'];
+    }
     private function parseXcrement($prevToken, $currToken) {
         throw new SyntaxError('[020]Increment ++ or decrement -- operators are not allowd.');
     }
@@ -870,11 +859,11 @@ class NameDotChain {
         self::$expression = $expression;
         if (in_array($token, ['true', 'false', 'null', 'this'])) {
             if (!self::isEmpty() or self::isFunc()) {
-                throw new SyntaxError("[021]'{$token}' is reserved word.");
+                throw new SyntaxError("[021]`{$token}` is reserved word.");
             }
             if ($token !== 'this') { 
                 if (self::isNextDot()) {
-                    throw new SyntaxError("[022]'{$token}' is reserved word.");
+                    throw new SyntaxError("[022]`{$token}` is reserved word.");
                 }
                 return $token;
             }

@@ -1,4 +1,4 @@
-<?php /* Tplus 1.0.5 2025-05-01 19:54:21 D:\Work\Tplus\test\html\index.html 000008336 */ ?>
+<?php /* Tplus 1.0.5 2025-05-03 21:18:21 D:\Work\Tplus\test\html\index.html 000008325 */ ?>
 <html>
 <head>
     <title>welcome!</title>
@@ -447,7 +447,6 @@
 <?= \TplValWrapper::_o(\Widget\Calender::MONTH['march'])->double() ?>
 
 
-zzzzzxxxxx
 </br>
 
 
