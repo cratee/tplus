@@ -31,10 +31,12 @@
 
 namespace Tplus;
 
+/**
+ * The Tplus Scripter is a lightweight transformer that compiles HTML template files into PHP scripts.
+ */
 class Scripter {
-    
-    private static $currentLine = 1;
 
+    public static $currentLine = 1;
     public static $valWrapper;
     public static $loopHelper;
     public static $userCode;
@@ -48,21 +50,25 @@ class Scripter {
             self::saveScript($config['HtmlScriptRoot'], $scriptPath, $sizePad, $header, self::parse()); 
 
         } catch(SyntaxError $e) {
-            self::reportError('Tplus Syntax Error: ', $e->getMessage(), $htmlPath, self::$currentLine);
+            self::reportError('Tplus Scripter Syntax Error ', $e->getMessage(), $htmlPath, self::$currentLine);
 
         } catch(FatalError $e) {
-            self::reportError('Tplus Scripter Fatal Error: ', $e->getMessage(), $htmlPath, self::$currentLine);
+            self::reportError('Tplus Scripter Fatal Error ', $e->getMessage(), $htmlPath, self::$currentLine);
         }
     }
 
     private static function reportError($title, $message, $htmlPath, $currentLine)
     {
         $htmlPath = realpath($htmlPath);
+        if (Statement::$rawTag) {
+            $message .= ' in `'.Statement::$rawTag.'`';
+        }
         if (ini_get('log_errors')) {
             error_log($title. $message.' in '.$htmlPath.' on line '.$currentLine);
         }
         if (ini_get('display_errors')) {
-            echo '<b>'.$title.'</b>'.htmlspecialchars($message).' in <b>'.$htmlPath.'</b> on line <b>'.$currentLine.'</b>';
+            include_once dirname(__file__).'/TplusError.php';
+            \TplusError::display($htmlPath, $currentLine, Statement::$rawTag, 0, $message, $title, false);
             if (ob_get_level()) ob_end_flush();
         }
         exit;
@@ -93,7 +99,7 @@ class Scripter {
             $path .= '/'.$dir;
             if (!is_dir($path)) {
                 if (!mkdir($path, $filePerms)) {
-                    throw new FatalError('[036]fail to create directory '.$path.' check the write-permission.');
+                    throw new FatalError('[036] fail to create directory '.$path.' check the write-permission.');
                 }
             }
         }
@@ -187,16 +193,16 @@ class Scripter {
             }            
         }
 
-        for ($commandStack = Statement::commandStack();; ) {
-            $command = $commandStack->pop();
-            if (!$command or in_array($command, ['@', '?'])) {
-                break;
+        if ($commandStack = Statement::commandStack()) {
+            while ($command = $commandStack->pop()) {
+                if (!$command or in_array($command, ['@', '?'])) {
+                    break;
+                }
+            }
+            if ($command) {
+                throw new SyntaxError("[044] `[{$command}...]` is not closed with [/]");
             }
         }
-        if ($command) {
-            throw new SyntaxError('['.$command.'...] is not closed by [/]');
-        }
-
         return $resultScript;
     }
 
@@ -211,9 +217,8 @@ class Scripter {
     }
 
     private static function findScriptTag() {
-        $scriptTagPattern = ini_get('short_open_tag') ? '~(<\?)~i' : '~(<\?(php\s|=))~i';
+        $scriptTagPattern = ini_get('short_open_tag') ? '~(<\?)~' : '~(<\?(php\s|=))~i';
         // @note <% and <script language=php> removed since php 7.0
-        // @todo check short_open_tag if whitespace is mandatory after <?  in v5.x.
 
         $split = preg_split(
             $scriptTagPattern,
@@ -299,12 +304,19 @@ class Statement {
         //  (else if) not needed for syntax check
     */
     private static $commandStack;
+    public static $rawTag;
+
+    public static function commandStack() {
+        return self::$commandStack;
+    }
 
     public static function script($command) {
     
         if (!isset(self::$commandStack)) {
             self::$commandStack = new Stack;
         }
+
+        self::$rawTag = "[$command";
 
         if ($command === '=') {
             return self::parseEcho();
@@ -323,33 +335,37 @@ class Statement {
                     return false;
                 }
                 if (in_array($prevCommand, [':', '@:'])) {     
-                    throw new SyntaxError("Unexpected ':' command");
+                    throw new SyntaxError("Unexpected `:` command");
                 }
-                switch($prevCommand[0]) {                    
+                switch($prevCommand) {
                     case '?': $script = self::parseElse();      break;
                     case '@': $script = self::parseLoopElse();  break;
                 }
         }
 
         self::parseRightTag();
-        return '<?php '.$script.' ?>';
-    }
-    public static function commandStack() {
-        return self::$commandStack;
+
+        //self::$rawTag = '';
+        return "<?php {$script} ".self::getComment()."?>\n";
     }
 
     private static function parseEcho() {
         $expression = Expression::script();
         self::parseRightTag();
-        return '<?= '.$expression.' ?>';
+        return "<?={$expression} ".self::getComment()."?>\n";
+    }
+
+    private static function getComment() {
+        $meta = [
+            'line' => Scripter::$currentLine,
+            'code' => str_replace('*/', '*\/', Statement::$rawTag).']'
+        ];
+        self::$rawTag = '';
+        return '/*'.json_encode($meta, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE).'*/';
     }
 
     private static function parseEnd() {
-        /*if (self::$commandStack->isEmpty()) {
-            throw new SyntaxError('Unexpected end tag [/]');
-        }*/
         $script = ('@' === self::$commandStack->peek()) ? '}}' : '}';
-        //while(!in_array(self::$commandStack->pop(), ['@', '?', '$']));
         while(!in_array(self::$commandStack->pop(), ['@', '?']));
         return $script;
     }
@@ -485,7 +501,15 @@ class Token {
     ];
 }
 
-class Cxt {		// Child Expression Trigger
+/**
+ * The Cxt (Child Expression Trigger) class determines the context of a new expression.
+ * 
+ * It is responsible for:
+ *  - validating the triggering token of a child expression,
+ *  - consuming the Token::OPEN or Token::DELIMITER token,
+ *  - and returning the appropriate Cxt::<CONST> representing the new expression context.
+ */
+class Cxt {
 	const ICE = 1<<0;			//	{ brace for array indexer
 	const IKT = 1<<1;			//	[ bracket for array indexer
 	const JCE = 1<<2;			//	{ brace for JSON
@@ -500,42 +524,6 @@ class Cxt {		// Child Expression Trigger
 	const JKT_COLON = 1<<10;
 	const FUN_COMMA = 1<<11;
 	const TRN_COLON = 1<<12;
-
-    
-    private static $expressionEndMap = [
-        self::FUN         => ['end' => [')'],             'check' => [',']],
-        self::JKT         => ['end' => [']'],             'check' => [':', ',']],
-        self::JCE         => ['end' => ['}'],             'check' => [':', ',']],
-        self::PAR         => ['check' => [')']],
-        self::ICE         => ['check' => ['}']],
-        self::IKT         => ['check' => [']']],
-        self::TRN         => ['check' => [':']],
-        self::FUN_COMMA   => ['check' => [',', ')']],
-        self::JCE_COMMA   => ['check' => [',', ':', '}']],
-        self::JCE_COLON   => ['check' => [',', '}']],
-        self::JKT_COMMA   => ['check' => [',', ':', ']']],
-        self::JKT_COLON   => ['check' => [',', ']']],
-        self::TRN_COLON   => ['check' => [',', ')', ']', '}']],
-    ];
-
-    public static function isEndOf($parentCxt, $stopCode, $expession) {
-        if (!$parentCxt && $stopCode === ']') { // end tag
-            return true;
-        }
-
-        $map = self::$expressionEndMap[$parentCxt] ?? null;
-        //@note `)` in [= a?b:c )] --> $map == null  after TRN_COLON expression stopped.
-
-        if (!empty($map['end']) and in_array($stopCode, $map['end'])) {
-            return true;
-        }
-
-        if (!empty($map['check']) and in_array($stopCode, $map['check'])) {
-            return $expession->preventEmptyExpression($stopCode);
-        }
-
-        throw new SyntaxError("[014]Unexpected token `{$stopCode}`");
-    }
 
     public static function get($prevToken, $currToken, $cxt) {
         switch ($currToken['value']) {
@@ -557,7 +545,8 @@ class Cxt {		// Child Expression Trigger
             case self::JCE_COLON : return self::JCE_COMMA;
             case self::JKT_COLON : return self::JKT_COMMA;
         }
-        throw new SyntaxError('[018]Invalid token: `,`'); // This should never be reached. Token `,` already validated by isEndOf().
+        throw new SyntaxError('[018] Invalid token: `,`'); 
+        // This excetion should never be reached. Token `,` already validated by CxStop::isValid().
     }
     private static function colon($cxt) {
         switch ($cxt) {
@@ -567,7 +556,8 @@ class Cxt {		// Child Expression Trigger
             case self::JCE_COMMA : return self::JCE_COLON;
             case self::JKT_COMMA : return self::JKT_COLON;
         }
-        throw new SyntaxError('[017]Invalid token: `:`'); // This should never be reached. Token `:` already validated by isEndOf().
+        throw new SyntaxError('[017]Invalid token: `:`');
+        // This excetion should never be reached. Token `:` already validated by CxStop::isValid().
     }
     private static function ternary($prevToken, $currToken, $cxt) {
         if ($prevToken['group'] & (Token::OPERAND | Token::CLOSE) 
@@ -575,6 +565,50 @@ class Cxt {		// Child Expression Trigger
             return self::TRN;
         }
         throw new SyntaxError('[016]Invalid token: `?`');
+    }
+}
+
+
+/**
+ * The CxStop (Child Expression Stop) class determines whether a child expression has ended.
+ * 
+ * Used by Expression->isFinished(), it maps each context (Cxt::<CONST>) to valid stopping tokens
+ * such as closing brackets or delimiters.
+ */
+class CxStop {
+    private static $map = [
+    //  $parentCxt      => $stopCode
+        Cxt::FUN        => ['end' => [')'],             'check' => [',']],
+        Cxt::JKT        => ['end' => [']'],             'check' => [':', ',']],
+        Cxt::JCE        => ['end' => ['}'],             'check' => [':', ',']],
+        Cxt::PAR        => ['check' => [')']],
+        Cxt::ICE        => ['check' => ['}']],
+        Cxt::IKT        => ['check' => [']']],
+        Cxt::TRN        => ['check' => [':']],
+        Cxt::FUN_COMMA  => ['check' => [',', ')']],
+        Cxt::JCE_COMMA  => ['check' => [',', ':', '}']],
+        Cxt::JCE_COLON  => ['check' => [',', '}']],
+        Cxt::JKT_COMMA  => ['check' => [',', ':', ']']],
+        Cxt::JKT_COLON  => ['check' => [',', ']']],
+        Cxt::TRN_COLON  => ['check' => [',', ')', ']', '}']],
+    ];
+    public static function isValid($parentCxt, $stopCode, $expession) {
+        if (!$parentCxt and $stopCode === ']') { // end tag
+            return true;
+        }
+
+        $map = self::$map[$parentCxt] ?? null;
+        // @note after ternary expression is finished, `)` in [= a?b:c )] --> $parentCxt==0 --> $map == null  
+
+        if (!empty($map['end']) and in_array($stopCode, $map['end'])) {
+            return true;
+        }
+
+        if (!empty($map['check']) and in_array($stopCode, $map['check'])) {
+            return $expession->preventEmptyExpression($stopCode);
+        }
+
+        throw new SyntaxError("[014] Unexpected token `{$stopCode}`");
     }
 }
 
@@ -616,6 +650,8 @@ class Expression {
             $afterCx = false;
             $currToken = $this->nextToken();
 
+            Statement::$rawTag .= $currToken['value'];
+
             if ($currToken['group'] === Token::SPACE) {
                 continue;
             }
@@ -640,18 +676,6 @@ class Expression {
             $prevToken = $currToken;
         }
     }
- 
-    private function nextToken() {
-        foreach (Token::GROUPS as $tokenGroup => $tokenNames) {
-            foreach ($tokenNames as $tokenName => $pattern) {
-                if (preg_match('#^('.$pattern.')#s', Scripter::$userCode, $matches)) {
-                    Scripter::decreaseUserCode($matches[0]);
-                    return ['group' => $tokenGroup, 'name' => $tokenName, 'value' => $matches[0]];
-                }
-            }
-        }
-        throw new SyntaxError('[013]Invalid expression: '.substr(Scripter::$userCode,0,10).' ...');
-    }
 
     private function isFinished($parentCxt, $afterCx) {
         if (! Scripter::$userCode ) {
@@ -664,21 +688,30 @@ class Expression {
             return false;
         }
 
-        if ($stopCode !== ':') {
-            if ($this->cxt == Cxt::TRN) {
-                throw new SyntaxError('[016]missing colon in ternary operator ? : ');
-            } else if ($this->cxt == Cxt::TRN_COLON) {
-                return true;
+        if ($afterCx) {
+            // Ternary expressions (a ? b : c) require two-step termination:
+            // 1st: when inner expression `c` finishes,
+            // 2nd: expression `a ? :`  must be finished without consuming stopCode `)`
+            return $this->cxt == Cxt::TRN_COLON 
+                ? true 
+                : false;
+        }
+
+        return CxStop::isValid($parentCxt, $stopCode, $this);
+    }
+
+    private function nextToken() {
+        foreach (Token::GROUPS as $tokenGroup => $tokenNames) {
+            foreach ($tokenNames as $tokenName => $pattern) {
+                if (preg_match('#^('.$pattern.')#s', Scripter::$userCode, $matches)) {
+                    Scripter::decreaseUserCode($matches[0]);
+                    return ['group' => $tokenGroup, 'name' => $tokenName, 'value' => $matches[0]];
+                }
             }
         }
-
-        if ($afterCx) {
-            return false;
-        }
-
-        return Cxt::isEndOf($parentCxt, $stopCode, $this);
+        throw new SyntaxError('[013] Invalid expression: '.substr(Scripter::$userCode,0,10).' ...');
     }
- 
+
     private function normalizeBI_UNARY($prevToken, &$currToken) {
         if ($currToken['group'] != Token::BI_UNARY) {
             return;
@@ -694,16 +727,26 @@ class Expression {
     private function checkTokensOrder($prevToken, $currToken) {
         if ($prevToken['group'] & (Token::OPERAND|Token::CLOSE) 
             and $currToken['group'] & (Token::OPERAND|Token::UNARY) ) {
-            throw new SyntaxError("[012]Unexpected {$prevToken['value']} {$currToken['value']}");
+            throw new SyntaxError("[012] Unexpected `{$prevToken['value']}{$currToken['value']}`");
         }
         if ((!$prevToken['group'] || $prevToken['group'] & (Token::OPERATOR|Token::UNARY))
-            and $currToken['group'] & (Token::OPERATOR|Token::UNARY)) {
-            // @note OPEN|CLOSE|DELIMITER are checked in Cxt::isEndOf()
-            throw new SyntaxError("[011]Unexpected {$prevToken['value']} {$currToken['value']}");
+            and $currToken['group'] === Token::OPERATOR) {
+            // @note OPEN|CLOSE|DELIMITER are checked in CxStop::isValid()
+            throw new SyntaxError("[011] Unexpected `{$prevToken['value']}{$currToken['value']}`");
+        }
+        if ($prevToken['group'] === Token::UNARY and $currToken['group']===Token::UNARY) {
+            throw new SyntaxError("[042] Consecutive Unary Operators are not allowed `{$prevToken['value']}{$currToken['value']}`");
         }
         if ($prevToken['group'] === Token::DOT and $currToken['name'] !== 'Name') {
-            throw new SyntaxError("[010]Unexpected {$prevToken['value']} {$currToken['value']}");
+            throw new SyntaxError("[010] Unexpected `{$prevToken['value']}{$currToken['value']}`");
         }
+        if (($prevToken['group'] 
+             && !($prevToken['group'] & (Token::OPERATOR|Token::UNARY)) 
+             && $prevToken['name'] !== 'Name')
+            and $currToken['group']===Token::OPEN) {
+            throw new SyntaxError("[043] Unexpected `{$prevToken['value']}{$currToken['value']}`");
+        }
+
     }
 
     private function setWrapperStartIndex($currToken) {
@@ -738,7 +781,7 @@ class Expression {
         return '?';
     }
 
-    // @note stopCodes )}]:, have already been checked in Cxt::isEndOf()
+    // @note stopCodes )}]:, have already been checked in CxStop::isValid()
     private function parseParenthesisClose($prevToken, $currToken) {
         return ')';
     }
@@ -975,30 +1018,30 @@ class NameDotChain {
     private static function _parseIsk($names, $loopDepth) {
         if (count($names)===1) {
             if (self::isFunc()) {
-                throw new SyntaxError('[028]Unexpected '.implode('', self::$tokens).'("');
+                throw new SyntaxError('[028] Unexpected '.implode('', self::$tokens).'("');
             }
             return Statement::loopName($loopDepth, $names[0]);
         }
         if (count($names)===2 and self::isFunc()) {
             if (!self::isWrapper($names[1])) {
                 //@note i,s and k cannot be object and so cannot have non-wrapper method.
-                throw new FatalError("[029]".Scripter::$valWrapper." doesn't have method {$names[1]}()");
+                throw new FatalError("[029] ".Scripter::$valWrapper." doesn't have method {$names[1]}()");
             }
 
             self::$expression->insertValWrapper();
 
             return Statement::loopName($loopDepth, $names[0]).')->'.$names[1];
         }
-        //@note i,s and k cannot be array and so cannot have element.
-        throw new SyntaxError('[030]Unexpected "'.implode('', self::$tokens).'"');
+        // @note i,s and k cannot be array and so cannot have element.
+        throw new SyntaxError('[030] Unexpected "'.implode('', self::$tokens).'"');
     }
     private static function _parseH($names, $loopDepth) {
         if (! (count($names) === 2 and self::isFunc())) {
-            throw new SyntaxError('[033]Unexpected '.implode('', self::$tokens));
+            throw new SyntaxError('[033] Unexpected '.implode('', self::$tokens));
         }
         $helperMethod = strtolower($names[1]);
         if (!in_array($helperMethod, Scripter::loopHelperMethods())) {
-            throw new FatalError('[031]loop helper method '.$helperMethod.'() is not defined.');
+            throw new FatalError('[031] loop helper method '.$helperMethod.'() is not defined.');
         }
         ['a'=>$a, 'i'=>$i, 's'=>$s, 'k'=>$k, 'v'=>$v] = Statement::loopNames($loopDepth);
         
@@ -1049,7 +1092,7 @@ class NameDotChain {
     private static function _parseFunc() {
         $func = self::$names[0];
         if (!function_exists($func) and !in_array($func,['isset','empty'])) {
-            throw new SyntaxError("[034]function `{$func}()` is not defined.");
+            throw new SyntaxError("[034] function `{$func}()` is not defined.");
         }
         return $func;
     }
@@ -1069,7 +1112,7 @@ class NameDotChain {
     private static function _parseStaticMethod($class, $method) {
         $script = $class.'::'.$method;
         if (!method_exists($class, $method)) {
-            throw new FatalError("[035]Static method `{$script}()` not found.");
+            throw new FatalError("[035] Static method `{$script}()` not found.");
         }
         return $script;
     }
@@ -1101,7 +1144,7 @@ class NameDotChain {
             return $script . ')->' . $method;
         }
         if ($onlyWrapper) {
-            throw new FatalError("[023]Wrapper method `".Scripter::$valWrapper."::{$method}()` not found in `".implode('', self::$tokens)."`");    
+            throw new FatalError("[023] Wrapper method `".Scripter::$valWrapper."::{$method}()` not found in `".implode('', self::$tokens)."`");    
         }
         return $script . '->' . $method;
     }
@@ -1125,18 +1168,18 @@ class NameDotChain {
         if ($path and class_exists($path)) {
             $script = $path ? $path.'::'.$constName : '\\'.$constName ;
             if (!defined($script)) {
-                throw new FatalError("[040]Constant `{$script}` not found.");    
+                throw new FatalError("[040] Constant `{$script}` not found.");    
             }
         } else {
             $script = $path.'\\'.$constName;
             if (!defined($script)) {
-                throw new FatalError("[038]Constant `{$script}` not found.");
+                throw new FatalError("[038] Constant `{$script}` not found.");
             }
         }
 
         foreach ($names as $name) {
             if (self::_constName($name)) {
-                throw new SyntaxError('[037]Unexpected constant usage: '.implode('', self::$tokens));    
+                throw new SyntaxError('[037] Unexpected constant usage: '.implode('', self::$tokens));    
             }
             $script .= "['{$name}']";
         }

@@ -12,24 +12,24 @@ class Tpl {
 
 			/**
 				(2/4) template script directory 
-				      which needs rwx permission of web server. 
+				      must be writable (rwx) by the web server. 
 			*/
     		'HtmlScriptRoot' => './html.php/',
 
 			/**
 				(3/4) script check
-					true : check  template file and script it if necessary.
-					false: ignore template file and just use script file.
+					true : check template file and compile if necessary.
+					false: skip template file check and use compiled script file only.
 
-					TIP: use your code for checking server mode.
+					TIP: You can use your own Logic for environment detection.
 					e.g. 'ScriptCheck' => $GLOBALS['server_mode']=='development' ? true : false;
 			*/
 			'ScriptCheck' => true,
 
 			/**
 				(4/4) assign check					
-					Setting to 'false' will ignore unassigned Tplus variables
-						and do not trigger Notice or Warning.
+					Set to 'false' to ignore unassigned Tplus variables
+					This suppreses E_NOTICE (PHP 7.x) or E_WARNING (PHP 8.x).
 			*/
 			'AssignCheck' => true
 		];

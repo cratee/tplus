@@ -26,7 +26,7 @@ class Tplus {
 
         } else if (!is_file($scriptPath)) {
             trigger_error(
-                "Tpl config 'ScriptCheck' is off and Tplus cannot find <b> ".$scriptPath.'</b>',
+                "Tpl config 'ScriptCheck' => false and Tplus cannot find <b> ".$scriptPath.'</b>',
                 E_USER_ERROR
             );
         }
@@ -34,27 +34,11 @@ class Tplus {
         $V = &$this->vals;
         ob_start();
         $this->stopAssignCheck();
+        $this->setErrorHandler();
 		include $scriptPath;
+        $this->unsetErrorHandler();
         $this->startAssignCheck();
         return ob_get_clean();
-    }
-
-    private function stopAssignCheck() {
-        if ($this->checkAssign()) {
-            return;
-        }
-        $this->phpReport = error_reporting();
-        $ErrorBit = version_compare(phpversion(), '8.0.0', '<') ? E_NOTICE : E_WARNING;
-        error_reporting($this->phpReport & ~$ErrorBit);
-    }
-    private function startAssignCheck() {
-        if ($this->checkAssign()) {
-            return;
-        }
-        error_reporting($this->phpReport);
-    }
-    private function checkAssign() {
-        return !isset($this->config['AssignCheck']) or $this->config['AssignCheck']==true;
     }
 
     private function script($htmlPath, $scriptPath) {
@@ -80,7 +64,7 @@ class Tplus {
     private function isScriptValid($htmlPath, $scriptPath) {        
 		if (!is_file($htmlPath)) {
 			trigger_error(
-                "Tpl config 'ScriptCheck' is on and Tplus cannot find <b> ".$htmlPath.'</b>', 
+                "Tpl config 'ScriptCheck' => true and Tplus cannot find <b> ".$htmlPath.'</b>', 
                 E_USER_ERROR
             );
 		}
@@ -108,6 +92,47 @@ class Tplus {
 		$fileMTime = @date('Y-m-d H:i:s', filemtime($htmlPath));
 		return '<?php /* Tplus '.self::VERSION.' '.$fileMTime.' '.realpath($htmlPath).' ';
     }
+
+    private function setErrorHandler() {
+        $tplus = $this;
+        set_error_handler(function($type, $message, $file, $line) use ($tplus) {
+            if (!$tplus->_checkAssign() and $type===$tplus->_getAssignErrorBit()) {
+                return;
+            }
+            include_once dirname(__file__).'/TplusError.php';
+            \TplusError::handle(['type'=>$type, 'message'=>$message, 'file'=>$file, 'line'=>$line]);
+        });
+
+        register_shutdown_function(function() {            
+            include_once dirname(__file__).'/TplusError.php';
+            \TplusError::handle(error_get_last());
+        });
+    }
+    private function unsetErrorHandler() {
+        restore_error_handler();
+    }
+
+    private function stopAssignCheck() {
+        if ($this->_checkAssign()) {
+            return;
+        }
+        $this->phpReport = error_reporting();
+        $AssignErrorBit = $this->_getAssignErrorBit();
+        error_reporting($this->phpReport & ~$AssignErrorBit);
+    }
+    private function startAssignCheck() {
+        if ($this->_checkAssign()) {
+            return;
+        }
+        error_reporting($this->phpReport);
+    }
+    private function _getAssignErrorBit() {
+        return version_compare(phpversion(), '8.0.0', '<') ? E_NOTICE : E_WARNING;
+    }
+    private function _checkAssign() {
+        return !isset($this->config['AssignCheck']) or $this->config['AssignCheck']==true;
+    }
+
 }
 
 
@@ -184,6 +209,4 @@ class TplusLoopHelper {
     }
 }
 
-class TplusRuntimeError extends Exception {
-    
-}
+class TplusRuntimeError extends \Exception {}
