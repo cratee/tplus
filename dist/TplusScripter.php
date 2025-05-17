@@ -1,34 +1,34 @@
 <?php
 /**
-    ------------------------------------------------------------------------------
-    Tplus 1.0.5
-    Released 2025-05-01
-
-    
-    The MIT License (MIT)
-    
-    Copyright: (C) 2023 Hyeonggil Park
-
-    Permission is hereby granted, free of charge, to any person obtaining a copy
-    of this software and associated documentation files (the "Software"), to deal
-    in the Software without restriction, including without limitation the rights
-    to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-    copies of the Software, and to permit persons to whom the Software is
-    furnished to do so, subject to the following conditions:
-
-    The above copyright notice and this permission notice shall be included in all
-    copies or substantial portions of the Software.
-
-    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-    OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-    SOFTWARE.
-    ------------------------------------------------------------------------------
-*/
-
+ *  ------------------------------------------------------------------------------
+ *  Tplus 1.1.0
+ *  Released 2025-05-19
+ * 
+ * 
+ *  The MIT License (MIT)
+ * 
+ *  Copyright: (C) 2023 Hyeonggil Park
+ * 
+ *  Permission is hereby granted, free of charge, to any person obtaining a copy
+ *  of this software and associated documentation files (the "Software"), to deal
+ *  in the Software without restriction, including without limitation the rights
+ *  to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ *  copies of the Software, and to permit persons to whom the Software is
+ *  furnished to do so, subject to the following conditions:
+ * 
+ *  The above copyright notice and this permission notice shall be included in all
+ *  copies or substantial portions of the Software.
+ * 
+ *  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ *  IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ *  FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ *  AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ *  LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ *  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ *  SOFTWARE.
+ *  ------------------------------------------------------------------------------
+ */
+   
 namespace Tplus;
 
 /**
@@ -53,7 +53,7 @@ class Scripter {
             self::reportError('Tplus Scripter Syntax Error ', $e->getMessage(), $htmlPath, self::$currentLine);
 
         } catch(FatalError $e) {
-            self::reportError('Tplus Scripter Fatal Error ', $e->getMessage(), $htmlPath, self::$currentLine);
+            self::reportError('Tplus Scripter Fatal Error ',  $e->getMessage(), $htmlPath, self::$currentLine);
         }
     }
 
@@ -68,7 +68,14 @@ class Scripter {
         }
         if (ini_get('display_errors')) {
             include_once dirname(__file__).'/TplusError.php';
-            \TplusError::display($htmlPath, $currentLine, Statement::$rawTag, 0, $message, $title, false);
+            \TplusErrorToBrowser::display(
+                $htmlPath,
+                $currentLine,
+                Statement::$rawTag,
+                null,
+                $message,
+                $title
+            );
             if (ob_get_level()) ob_end_flush();
         }
         exit;
@@ -78,14 +85,14 @@ class Scripter {
         $scriptRoot = preg_replace(['~\\\\+~','~/$~'], ['/',''], $scriptRoot);
 
         if (!is_dir($scriptRoot)) {
-            throw new FatalError('script root '.$scriptRoot.' does not exist');
+            throw new FatalError('[051] script root '.$scriptRoot.' does not exist');
         }
         if (!is_readable($scriptRoot)) {
-            throw new FatalError('script root '.$scriptRoot.' is not readable. check read-permission of web server.');
+            throw new FatalError('[052] script root '.$scriptRoot.' is not readable. check read-permission of web server.');
         }
         if (substr(__FILE__,0,1)==='/' and !is_writable($scriptRoot)) {
             //@note is_writable() might not work on some OS(old version Windows?).
-            throw new FatalError('script root '.$scriptRoot.' is not writable. check write-permission of web server.');
+            throw new FatalError('[053] script root '.$scriptRoot.' is not writable. check write-permission of web server.');
         }
 
         $filePerms  = fileperms($scriptRoot);
@@ -112,10 +119,10 @@ class Scripter {
         $scriptFile = $path.'/'.$filename;
 
         if (!file_put_contents($scriptFile, $script, LOCK_EX)) {
-            throw new FatalError('fail to write file '.$scriptFile.' check permission or unknown problem.');
+            throw new FatalError('[049] fail to write file '.$scriptFile.' check permission or unknown problem.');
         }
         if (!chmod($path.'/'.$filename, $filePerms)) {
-            throw new FatalError('fail to set permission of file '.$scriptFile.' check permission or unknown problem.');
+            throw new FatalError('[050] fail to set permission of file '.$scriptFile.' check permission or unknown problem.');
         }
     }
 
@@ -135,7 +142,7 @@ class Scripter {
         if (!isset($methods[$class])) {
             $methods[$class] = [];
             if (!class_exists($class)) {
-                throw new FatalError('[039]Class "'.substr($class, 1).'" does not exist.');
+                throw new FatalError('[039] Class "'.substr($class, 1).'" does not exist.');
             }
             $reflectionMethods = (new \ReflectionClass($class))->getMethods(\ReflectionMethod::IS_PUBLIC);
             foreach ($reflectionMethods as $m) {
@@ -151,7 +158,7 @@ class Scripter {
     private static function parse() {
         $foundScriptTag = self::findScriptTag();
         if ($foundScriptTag) {
-            throw new SyntaxError('PHP tag not allowed. <b>'.$foundScriptTag.'</b>');
+            throw new SyntaxError('[048] PHP tag not allowed. <b>'.$foundScriptTag.'</b>');
         };
 
         $resultScript='';
@@ -296,13 +303,14 @@ class Stack {
 
 class Statement {
     /**
-        $commandStack's items
-            ?   (if)
-            :   (else)
-            @   (loop)
-            @:  (loop else)
-        //  (else if) not needed for syntax check
-    */
+     *  $commandStack's items
+     *      ?   (if)
+     *      :   (else)
+     *      @   (loop)
+     *      @:  (loop else)
+     * 
+     *      (else if) not needed for syntax check
+     */
     private static $commandStack;
     public static $rawTag;
 
@@ -335,7 +343,7 @@ class Statement {
                     return false;
                 }
                 if (in_array($prevCommand, [':', '@:'])) {     
-                    throw new SyntaxError("Unexpected `:` command");
+                    throw new SyntaxError("[046] Unexpected `:` command");
                 }
                 switch($prevCommand) {
                     case '?': $script = self::parseElse();      break;
@@ -345,7 +353,6 @@ class Statement {
 
         self::parseRightTag();
 
-        //self::$rawTag = '';
         return "<?php {$script} ".self::getComment()."?>\n";
     }
 
@@ -379,7 +386,7 @@ class Statement {
             (?:\s*-->)?
         ~xs';
         if (!preg_match($pattern, Scripter::$userCode, $matches)) {
-            throw new SyntaxError('Tag not correctly closed.');
+            throw new SyntaxError('[045] Tag not correctly closed.');
         }
     
         Scripter::decreaseUserCode($matches[0]);
@@ -607,7 +614,7 @@ class CxStop {
         if (!empty($map['check']) and in_array($stopCode, $map['check'])) {
             return $expession->preventEmptyExpression($stopCode);
         }
-        
+
         Statement::$rawTag .= $stopCode;
         throw new SyntaxError("[014] Unexpected token `{$stopCode}`");
     }
@@ -629,7 +636,7 @@ class Expression {
                     
     public function preventEmptyExpression($stopCode) {
         if (empty($this->scriptPieces)) {
-            throw new SyntaxError("[013]Unexpected token `{$stopCode}`:  missing expression before `{$stopCode}`");
+            throw new SyntaxError("[013] missing expression before `{$stopCode}`");
         }
         return true;
     }
@@ -680,7 +687,7 @@ class Expression {
 
     private function isFinished($parentCxt, $afterCx) {
         if (! Scripter::$userCode ) {
-            throw new SyntaxError('[015]HTML file ends without Tplus closing tag `]`');
+            throw new SyntaxError('[015] HTML file ends without Tplus closing tag `]`');
         }
         
         $stopCode = substr(Scripter::$userCode, 0, 1);
@@ -764,7 +771,7 @@ class Expression {
  
     public function insertValWrapper() {
         if ($this->wrapperStartIndex === -1) {
-            throw new FatalError('[003]TplusScripter internal bug: fails to parse val wrapper method.');
+            throw new FatalError('[003] TplusScripter internal bug: fails to parse val wrapper method.');
         }
         array_splice($this->scriptPieces, $this->wrapperStartIndex, 0, Scripter::$valWrapper.'::_o(');
     }
@@ -832,7 +839,7 @@ class Expression {
         return $currToken['value'];
     }
     private function parseXcrement($prevToken, $currToken) {
-        throw new SyntaxError('[020]Increment ++ or decrement -- operators are not allowd.');
+        throw new SyntaxError('[020] increment ++ or decrement -- operators are not allowd.');
     }
     private function parseComparison($prevToken, $currToken) {
         return $currToken['value'];  // === == !== != < > <= >=     @todo check a == b == c
@@ -885,16 +892,16 @@ class NameDotChain {
 
     public static function confirmWrapper($name, $onlyWrapper) {
         if (!self::isFunc()) {
-            throw new SyntaxError("[007]unexpected {$name}");
+            throw new SyntaxError("[007] unexpected {$name}");
         }
         if ($onlyWrapper and !self::isWrapper($name)) {
-            throw new SyntaxError("[041]Wrapper method {$name}() not found in class ".Scripter::$valWrapper);
+            throw new SyntaxError("[041] Wrapper method {$name}() not found in class ".Scripter::$valWrapper);
         }
     }
 
     public static function addDot($token) {
         if (!self::isEmpty() and strlen($token) > 1) { //  multiple dots after Name. e.g) 'abc..' 'xyz...'
-            throw new SyntaxError('[008]Unexpected consecutive dots in expression: '.implode('', self::$tokens).$token);
+            throw new SyntaxError('[008] Unexpected consecutive dots in expression: '.implode('', self::$tokens).$token);
         }
         self::$tokens[] = $token;
     }
@@ -903,11 +910,11 @@ class NameDotChain {
         self::$expression = $expression;
         if (in_array($token, ['true', 'false', 'null', 'this'])) {
             if (!self::isEmpty() or self::isFunc()) {
-                throw new SyntaxError("[021]`{$token}` is reserved word.");
+                throw new SyntaxError("[021] `{$token}` is reserved word.");
             }
             if ($token !== 'this') { 
                 if (self::isNextDot()) {
-                    throw new SyntaxError("[022]`{$token}` is reserved word.");
+                    throw new SyntaxError("[022] `{$token}` is reserved word.");
                 }
                 return $token;
             }
@@ -960,7 +967,7 @@ class NameDotChain {
 
         if ($global === 'GLOBALS') {
             if (empty($names)) {
-                throw new SyntaxError('[023]Unexpected auto-global usage: '.implode('', self::$tokens));    
+                throw new SyntaxError('[023] Unexpected auto-global usage: '.implode('', self::$tokens));    
             }
             $script = '$GLOBALS';
             foreach ($names as $name) {
@@ -970,7 +977,7 @@ class NameDotChain {
         } else {    // GET SERVER COOKIE SESSION
             if (count($names) !== 1) { 
                 // when code is GET.keword.esc(), count($names) must be 1.
-                throw new SyntaxError('[024]Unexpected auto-global usage: '.implode('', self::$tokens));
+                throw new SyntaxError('[024] Unexpected auto-global usage: '.implode('', self::$tokens));
             }
             $script = '$_'.$global.'["'.$names[0].'"]';
         } 
@@ -987,11 +994,11 @@ class NameDotChain {
             if (count($names) === 1) {
                 return '$this';
             }
-            throw new SyntaxError('[025]access to object property is not allowd.'); // this.prop
+            throw new SyntaxError('[025] access to object property is not allowd.'); // this.prop
         }
         $method = array_pop($names);
         if (count($names) !== 1) {
-            throw new SyntaxError('[026]access to object property is not allowd.');  // this.prop.foo()
+            throw new SyntaxError('[026] access to object property is not allowd.');  // this.prop.foo()
         }
         return '$this->'.$method;     // this.method()
     }
@@ -1003,7 +1010,7 @@ class NameDotChain {
         $loopDepth = strlen(array_shift($tokens));
 
         if ($loopDepth > Statement::loopDepth()) {
-            throw new SyntaxError('[027]depth of loop member "'.implode('', self::$tokens).'" is not correct.');
+            throw new SyntaxError('[027] depth of loop member "'.implode('', self::$tokens).'" is not correct.');
         }
 
         if (in_array($names[0], ['i', 's', 'k'])) {
@@ -1093,6 +1100,7 @@ class NameDotChain {
     private static function _parseFunc() {
         $func = self::$names[0];
         if (!function_exists($func) and !in_array($func,['isset','empty'])) {
+            Statement::$rawTag.='(';
             throw new SyntaxError("[034] function `{$func}()` is not defined.");
         }
         return $func;
@@ -1113,6 +1121,7 @@ class NameDotChain {
     private static function _parseStaticMethod($class, $method) {
         $script = $class.'::'.$method;
         if (!method_exists($class, $method)) {
+            Statement::$rawTag.='(';
             throw new FatalError("[035] Static method `{$script}()` not found.");
         }
         return $script;

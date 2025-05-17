@@ -6,31 +6,31 @@ class Tpl {
 	protected static function config() {
 		return [
 			/**
-				(1/4) template directory 
-			*/
+			 *  (1/4) template directory 
+			 */
 			'HtmlRoot' => './html/',
 
 			/**
-				(2/4) template script directory 
-				      must be writable (rwx) by the web server. 
-			*/
+			 *  (2/4) template script directory 
+			 * 		must be writable (rwx) by the web server. 
+			 */
     		'HtmlScriptRoot' => './html.php/',
 
 			/**
-				(3/4) script check
-					true : check template file and compile if necessary.
-					false: skip template file check and use compiled script file only.
-
-					TIP: You can use your own Logic for environment detection.
-					e.g. 'ScriptCheck' => $GLOBALS['server_mode']=='development' ? true : false;
-			*/
+			 *  (3/4) script check
+			 * 		true : check template file and compile if necessary.
+			 * 		false: skip template file check and use compiled script file only.
+			 * 
+			 * 		TIP: You can use your own Logic for environment detection.
+			 * 		e.g. 'ScriptCheck' => $GLOBALS['server_mode']=='development' ? true : false;
+			 */
 			'ScriptCheck' => true,
 
 			/**
-				(4/4) assign check					
-					Set to 'false' to ignore unassigned Tplus variables
-					This suppreses E_NOTICE (PHP 7.x) or E_WARNING (PHP 8.x).
-			*/
+			 *  (4/4) assign check
+			 * 		Set to 'false' to ignore unassigned Tplus variables
+			 * 		This suppreses E_NOTICE (PHP 7.x) or E_WARNING (PHP 8.x).
+			 */
 			'AssignCheck' => true
 		];
 	}
@@ -81,7 +81,6 @@ class TplValWrapper extends TplusValWrapper {
 		}
 		return $this->val * 2;
 	}
-
 }
 
 class TplLoopHelper extends TplusLoopHelper {
