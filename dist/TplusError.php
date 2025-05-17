@@ -75,7 +75,7 @@ class TplusError {
 .tplus-error-content {background:#f2f2f2;padding:3px 10px;}
 .tplus-error-content span {font-weight:bold}
 .tplus-error-content code {font:12px consolas, monospace;margin:0 4px;padding:1px 4px;border-radius:2px;vertical-align:1px}
-code.tplus-error-level1 {background:#da0;color:#ffd}
+code.tplus-error-level1 {background:#262;color:#dfd}
 code.tplus-error-level2 {background:#38c;color:#def}
 code.tplus-error-level3 {background:#c22;color:#fcc} 
 code.tplus-error-code {padding:0px;margin:0px;font-size:14px;font-weight:bold;}

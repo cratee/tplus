@@ -607,7 +607,8 @@ class CxStop {
         if (!empty($map['check']) and in_array($stopCode, $map['check'])) {
             return $expession->preventEmptyExpression($stopCode);
         }
-
+        
+        Statement::$rawTag .= $stopCode;
         throw new SyntaxError("[014] Unexpected token `{$stopCode}`");
     }
 }
