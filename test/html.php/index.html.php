@@ -1,4 +1,4 @@
-<?php /* Tplus 1.1.0 2025-05-18 04:40:54 D:\Work\Tplus\test\html\index.html 000013180 */ ?>
+<?php /* Tplus 1.1.0 2025-05-20 05:44:55 D:\Work\Tplus\test\html\index.html 000013052 */ ?>
 <html>
 <head>
     <title>welcome!</title>
@@ -566,14 +566,6 @@ baz<?php } /*{"line":298,"code":"[/]"}*/?>
 
 
 <br/><br/>
-
-<?=$V['qqqqq'] /*{"line":461,"code":"[= qqqqq  ]"}*/?>
-
-
-<?=$V['asfd']->ewwew() /*{"line":463,"code":"[=asfd.ewwew()]"}*/?>
-
-
-
 
 
 </br>

@@ -29,9 +29,9 @@ class TplusError {
                     $file, 
                     $line, 
                     $code, 
-                    $runtimeType, 
                     $phpMessage, 
-                    "Tplus Runtime Error"
+                    "Tplus Runtime Error",
+                    $runtimeType
                 );
             }
         } else {
@@ -117,13 +117,20 @@ class TplusError {
 class TplusErrorToBrowser {
     private static $count=0;
     
-    public static function display($file, $line, $code, $runtimeType, $message, $title) {
-        $titleClass = $runtimeType ? 'tplus-error-title' : 'tplus-scripter-title';
+    public static function display($file, $line, $code, $message, $title, $runtimeType=null) {
+
+        if ($runtimeType) {
+            $titleClass =  'tplus-runtime-title';
+            $titleDivClass = '';
+        } else {
+            $titleClass =  'tplus-scripter-title';
+            $titleDivClass = strstr($title, 'Syntax') ? 'tplus-syntax' : 'tplus-fatal';
+        }
+        $titleClass = $runtimeType ? 'tplus-runtime-title': 'tplus-scripter-title';
+
         $message = str_replace("\n","<br />\n", htmlspecialchars($message));
         $messageTitle = $runtimeType ? 'PHP Message' : 'Message';
         $code = htmlspecialchars($code);
-
-		//[$errorGroup, $erroConstName, $errorLevel] = self::getErrorType($errorConst);
 
         if ( ! self::$count) {
 ?>
@@ -141,9 +148,11 @@ code.tplus-error-level1 {background:#262;color:#ada}
 code.tplus-error-level2 {background:#38c;color:#def}
 code.tplus-error-level3 {background:#c22;color:#fcc} 
 code.tplus-error-code {padding:0px;margin:0px;font-size:14px;font-weight:bold;}
-.tplus-error td.tplus-error-title {font-size:13px;font-weight:bold;color:#555; padding:3px 5px;}
-.tplus-error td.tplus-scripter-title{font-size:13px;font-weight:bold;color:#c22; padding:2px}
-.tplus-error td.tplus-scripter-title div{background:#16a;color:#def;padding:4px 5px;border-radius:2px;float:left}
+td.tplus-runtime-title {font-size:13px;font-weight:bold;color:#555; padding:3px 5px;}
+td.tplus-scripter-title{font-size:13px;font-weight:bold;color:#c22; padding:2px}
+td.tplus-scripter-title div{padding:4px 5px;border-radius:3px;float:left}
+div.tplus-syntax{background:#c20;color:#fcb;}
+div.tplus-fatal{background:#16a;color:#bdf;}
 </style>
 
 <?php 
@@ -153,7 +162,7 @@ code.tplus-error-code {padding:0px;margin:0px;font-size:14px;font-weight:bold;}
 <div class="tplus-error-container">
 <table class="tplus-error">
 <tr>
-    <td colspan="2" class="<?=$titleClass?>"><div><?=$title?></div></td>
+    <td colspan="2" class="<?=$titleClass?>"><div class="<?=$titleDivClass?>"><?=$title?></div></td>
 </tr>
 <?php if ($runtimeType) {?>
 <tr>

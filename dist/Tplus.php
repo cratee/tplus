@@ -94,13 +94,11 @@ class Tplus {
     }
 
     private function setErrorHandler() {
-        $tplus = $this;
-        set_error_handler(function($type, $message, $file, $line) use ($tplus) {
-            if (!$tplus->_checkAssign() and $type===$tplus->_getAssignErrorBit()) {
-                return;
+        set_error_handler(function($type, $message, $file, $line) {
+            if (error_reporting() & $type) {
+                include_once dirname(__file__).'/TplusError.php';
+                \TplusError::handle(['type'=>$type, 'message'=>$message, 'file'=>$file, 'line'=>$line]);
             }
-            include_once dirname(__file__).'/TplusError.php';
-            \TplusError::handle(['type'=>$type, 'message'=>$message, 'file'=>$file, 'line'=>$line]);
         });
 
         register_shutdown_function(function() {            

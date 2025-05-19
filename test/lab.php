@@ -1,8 +1,12 @@
 <?php  
+namespace Abc;
+
+class Abc {}
+
 
 include '../dist/Tpl-dist.php';
 
-echo Tpl::get('lab.html', []);
+echo \Tpl::get('lab.html', []);
 
 exit;
 $text = 'Uncaught Error: Call to a member function ewwew() on null in D:\Work\Tplus\test\html.php\index.html.php:571

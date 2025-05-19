@@ -2,12 +2,12 @@
 /**
  *  ------------------------------------------------------------------------------
  *  Tplus 1.1.0
- *  Released 2025-05-19
+ *  Released 2025-05-20
  * 
  * 
  *  The MIT License (MIT)
  * 
- *  Copyright: (C) 2023 Hyeonggil Park
+ *  Copyright: (C) 2023-2025 Hyeonggil Park
  * 
  *  Permission is hereby granted, free of charge, to any person obtaining a copy
  *  of this software and associated documentation files (the "Software"), to deal
@@ -72,7 +72,6 @@ class Scripter {
                 $htmlPath,
                 $currentLine,
                 Statement::$rawTag,
-                null,
                 $message,
                 $title
             );
@@ -119,10 +118,10 @@ class Scripter {
         $scriptFile = $path.'/'.$filename;
 
         if (!file_put_contents($scriptFile, $script, LOCK_EX)) {
-            throw new FatalError('[049] fail to write file '.$scriptFile.' check permission or unknown problem.');
+            throw new FatalError('[049] fail to write file '.$scriptFile.' check the write-permission.');
         }
         if (!chmod($path.'/'.$filename, $filePerms)) {
-            throw new FatalError('[050] fail to set permission of file '.$scriptFile.' check permission or unknown problem.');
+            throw new FatalError('[050] fail to set permission of file '.$scriptFile.' check the write-permission.');
         }
     }
 
@@ -225,7 +224,7 @@ class Scripter {
 
     private static function findScriptTag() {
         $scriptTagPattern = ini_get('short_open_tag') ? '~(<\?)~' : '~(<\?(php\s|=))~i';
-        // @note <% and <script language=php> removed since php 7.0
+        // @note Since php 7.0, <% and <script language=php> are removed.
 
         $split = preg_split(
             $scriptTagPattern,
@@ -512,9 +511,10 @@ class Token {
  * The Cxt (Child Expression Trigger) class determines the context of a new expression.
  * 
  * It is responsible for:
- *  - validating the triggering token of a child expression,
- *  - consuming the Token::OPEN or Token::DELIMITER token,
- *  - and returning the appropriate Cxt::<CONST> representing the new expression context.
+ *  - validating the triggering token (Token::OPEN or Token::DELIMITER) of a child expression,
+ *  - returning the appropriate Cxt::<CONST> representing the new expression context.
+ * Then, the current expression object will consume the Token::OPEN or Token::DELIMITER token,
+ * and create a new child expression object with $parentCxt.
  */
 class Cxt {
 	const ICE = 1<<0;			//	{ brace for array indexer
@@ -581,6 +581,8 @@ class Cxt {
  * 
  * Used by Expression->isFinished(), it maps each context (Cxt::<CONST>) to valid stopping tokens
  * such as closing brackets or delimiters.
+ * 
+ * The child expression does not consume $stopCode, which is consumed by parent expression
  */
 class CxStop {
     private static $map = [
@@ -895,7 +897,7 @@ class NameDotChain {
             throw new SyntaxError("[007] unexpected {$name}");
         }
         if ($onlyWrapper and !self::isWrapper($name)) {
-            throw new SyntaxError("[041] Wrapper method {$name}() not found in class ".Scripter::$valWrapper);
+            throw new SyntaxError("[041] Wrapper method {$name}() is not defined in class ".Scripter::$valWrapper);
         }
     }
 
@@ -1122,7 +1124,7 @@ class NameDotChain {
         $script = $class.'::'.$method;
         if (!method_exists($class, $method)) {
             Statement::$rawTag.='(';
-            throw new FatalError("[035] Static method `{$script}()` not found.");
+            throw new FatalError("[035] Static method `{$script}()` is not defined.");
         }
         return $script;
     }
@@ -1154,7 +1156,7 @@ class NameDotChain {
             return $script . ')->' . $method;
         }
         if ($onlyWrapper) {
-            throw new FatalError("[023] Wrapper method `".Scripter::$valWrapper."::{$method}()` not found in `".implode('', self::$tokens)."`");    
+            throw new FatalError("[023] Wrapper method `".Scripter::$valWrapper."::{$method}()` is not defined in `".implode('', self::$tokens)."`");
         }
         return $script . '->' . $method;
     }
@@ -1178,12 +1180,12 @@ class NameDotChain {
         if ($path and class_exists($path)) {
             $script = $path ? $path.'::'.$constName : '\\'.$constName ;
             if (!defined($script)) {
-                throw new FatalError("[040] Constant `{$script}` not found.");    
+                throw new FatalError("[040] Constant `{$script}` is not defined.");    
             }
         } else {
             $script = $path.'\\'.$constName;
             if (!defined($script)) {
-                throw new FatalError("[038] Constant `{$script}` not found.");
+                throw new FatalError("[038] Constant `{$script}` is not defined.");
             }
         }
 
