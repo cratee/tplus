@@ -1,8 +1,8 @@
 <?php
 /**
  *  ------------------------------------------------------------------------------
- *  Tplus 1.1.0
- *  Released 2025-05-20
+ *  Tplus 1.1.1
+ *  Released 2025-06-26
  * 
  * 
  *  The MIT License (MIT)
@@ -330,7 +330,7 @@ class Statement {
         }
         switch($command) {
             case '@': $script = self::parseLoop();      break;
-            case '?': $script = self::parseBranch();    break;
+            case '?': $script = self::parseIf();    break;
             case '/': 
                 if (!self::$commandStack->peek()) {
                     return false;
@@ -398,13 +398,16 @@ class Statement {
     }
 
     private static function parseLoop() {
-        self::$commandStack->push('@');
-        $expressionScript = Expression::script();
+        if (!self::expressionExists()) {
+            self::$rawTag .= ' ]';
+            throw new SyntaxError('[048] Loop statement has not expression.');
+        }
 
+        self::$commandStack->push('@');
 
         ['a'=>$a, 'i'=>$i, 's'=>$s, 'k'=>$k, 'v'=>$v] = self::loopNames(self::loopDepth());
 
-        return $a.'='.$expressionScript.';'
+        return $a.'='.Expression::script().';'
             .'if (is_array('.$a.') and !empty('.$a.')) {'
                 .$s.'=count('.$a.');'
                 .$i.'=-1;'
@@ -412,12 +415,13 @@ class Statement {
                     .' ++'.$i.';';
     }
 
-    private static function parseBranch() {
-        $expressionScript = Expression::script();
+    private static function parseIf() {
+        if (!self::expressionExists()) {
+            self::$rawTag .= ' ]';
+            throw new SyntaxError('[047] if statement has not expression.');
+        }
         self::$commandStack->push('?');
-        $statementScript = 'if ('.$expressionScript.') {';
-
-        return $statementScript; 
+        return 'if ('.Expression::script().') {';
     }
 
 
@@ -1208,4 +1212,3 @@ class NameDotChain {
         return preg_match('/^[A-Z][A-Z0-9_]*$/', $name);
     }
 }
-
