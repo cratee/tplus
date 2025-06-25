@@ -4,5 +4,5 @@ Thumbs.db
 .vscode/
 .idea/
 .env
-tplus/test/html.php/*
-!tplus/test/html.php/.gitkeep
+/test/html.php/*
+!/test/html.php/.gitkeep
