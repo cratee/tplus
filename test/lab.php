@@ -1,7 +1,15 @@
-<?php  
-namespace Abc;
+<?="a"?>
+<?="b"?>
 
-class Abc {}
+<?="a"?>
+
+<?="b"?>
+
+
+
+<?php  
+
+exit;
 
 
 include '../dist/Tpl-dist.php';

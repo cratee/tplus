@@ -352,13 +352,19 @@ class Statement {
 
         self::parseRightTag();
 
-        return "<?php {$script} ".self::getComment()."?>\n";
+        return "<?php {$script} ".self::getComment()."?>".self::newLine();
     }
 
     private static function parseEcho() {
         $expression = Expression::script();
         self::parseRightTag();
-        return "<?={$expression} ".self::getComment()."?>\n";
+        return "<?={$expression} ".self::getComment()."?>".self::newLine();
+    }
+
+    private static function newLine() {
+        return in_array(substr(Scripter::$userCode, 0, 1), ["\n", "\r"])
+            ? ""
+            : "\n";
     }
 
     private static function getComment() {
