@@ -37,13 +37,13 @@ namespace Tplus;
 class Scripter {
 
     public static $currentLine = 1;
-    public static $valWrapper;
+    public static $wrapper;
     public static $loopHelper;
     public static $userCode;
 
     public static function script($htmlPath, $scriptPath, $sizePad, $header, $config) {
     
-        self::$valWrapper = '\\'.(empty($config['ValWrapper']) ? 'TplValWrapper' : $config['ValWrapper']);
+        self::$wrapper = '\\'.(empty($config['Wrapper']) ? 'TplWrapper' : $config['Wrapper']);
         self::$loopHelper = '\\'.(empty($config['LoopHelper']) ? 'TplLoopHelper' : $config['LoopHelper']);
         try {
             self::$userCode = self::getHtml($htmlPath);        
@@ -57,8 +57,8 @@ class Scripter {
         }
     }
 
-    private static function reportError($title, $message, $htmlPath, $currentLine)
-    {
+    private static function reportError($title, $message, $htmlPath, $currentLine) {
+
         $htmlPath = realpath($htmlPath);
         if (Statement::$rawTag) {
             $message .= ' in `'.Statement::$rawTag.'`';
@@ -81,17 +81,18 @@ class Scripter {
     }
 
     private static function saveScript($scriptRoot, $scriptPath, $sizePad, $header, $script) {
+        
         $scriptRoot = preg_replace(['~\\\\+~','~/$~'], ['/',''], $scriptRoot);
 
         if (!is_dir($scriptRoot)) {
-            throw new FatalError('[051] script root '.$scriptRoot.' does not exist');
+            throw new FatalError('[051] Script root path not found: '.$scriptRoot);
         }
         if (!is_readable($scriptRoot)) {
-            throw new FatalError('[052] script root '.$scriptRoot.' is not readable. check read-permission of web server.');
+            throw new FatalError('[052] Script root is not readable. Check web-server read-permission for: '.$scriptRoot);
         }
         if (substr(__FILE__,0,1)==='/' and !is_writable($scriptRoot)) {
             //@note is_writable() might not work on some OS(old version Windows?).
-            throw new FatalError('[053] script root '.$scriptRoot.' is not writable. check write-permission of web server.');
+            throw new FatalError('[053] Script root is not writable. Check web-server write-permission: '.$scriptRoot);
         }
 
         $filePerms  = fileperms($scriptRoot);
@@ -105,7 +106,7 @@ class Scripter {
             $path .= '/'.$dir;
             if (!is_dir($path)) {
                 if (!mkdir($path, $filePerms)) {
-                    throw new FatalError('[036] fail to create directory '.$path.' check the write-permission.');
+                    throw new FatalError('[036] Cannot create directory '.$path.' Check write-permission.');
                 }
             }
         }
@@ -118,10 +119,10 @@ class Scripter {
         $scriptFile = $path.'/'.$filename;
 
         if (!file_put_contents($scriptFile, $script, LOCK_EX)) {
-            throw new FatalError('[049] fail to write file '.$scriptFile.' check the write-permission.');
+            throw new FatalError('[049] failed to write file '.$scriptFile.' Check write-permission.');
         }
         if (!chmod($path.'/'.$filename, $filePerms)) {
-            throw new FatalError('[050] fail to set permission of file '.$scriptFile.' check the write-permission.');
+            throw new FatalError('[050] Cannot set permission for '.$scriptFile.'. Check the write-permission.');
         }
     }
 
@@ -130,8 +131,8 @@ class Scripter {
         self::$currentLine += substr_count($parsedUserCode,"\n");
     }
 
-    public static function valWrapperMethods() {
-        return self::getMethods(self::$valWrapper);
+    public static function wrapperMethods() {
+        return self::getMethods(self::$wrapper);
     }
     public static function loopHelperMethods() {
         return self::getMethods(self::$loopHelper);
@@ -141,7 +142,7 @@ class Scripter {
         if (!isset($methods[$class])) {
             $methods[$class] = [];
             if (!class_exists($class)) {
-                throw new FatalError('[039] Class "'.substr($class, 1).'" does not exist.');
+                throw new FatalError('[039] Class "'.substr($class, 1).'" not found .');
             }
             $reflectionMethods = (new \ReflectionClass($class))->getMethods(\ReflectionMethod::IS_PUBLIC);
             foreach ($reflectionMethods as $m) {
@@ -157,7 +158,7 @@ class Scripter {
     private static function parse() {
         $foundScriptTag = self::findScriptTag();
         if ($foundScriptTag) {
-            throw new SyntaxError('[048] PHP tag not allowed. <b>'.$foundScriptTag.'</b>');
+            throw new SyntaxError('[048] PHP tag not allowed. '.$foundScriptTag);
         };
 
         $resultScript='';
@@ -206,7 +207,7 @@ class Scripter {
                 }
             }
             if ($command) {
-                throw new SyntaxError("[044] `[{$command}...]` is not closed with [/]");
+                throw new SyntaxError("[044] Tag `[{$command}...]` must be closed with [/]");
             }
         }
         return $resultScript;
@@ -342,7 +343,7 @@ class Statement {
                     return false;
                 }
                 if (in_array($prevCommand, [':', '@:'])) {     
-                    throw new SyntaxError("[046] Unexpected `:` command");
+                    throw new SyntaxError("[046] Unexpected command `:`");
                 }
                 switch($prevCommand) {
                     case '?': $script = self::parseElse();      break;
@@ -391,7 +392,7 @@ class Statement {
             (?:\s*-->)?
         ~xs';
         if (!preg_match($pattern, Scripter::$userCode, $matches)) {
-            throw new SyntaxError('[045] Tag not correctly closed.');
+            throw new SyntaxError('[045] Tag must be closed with `]`');
         }
     
         Scripter::decreaseUserCode($matches[0]);
@@ -400,14 +401,14 @@ class Statement {
     private static function parseLoop() {
         if (!self::expressionExists()) {
             self::$rawTag .= ' ]';
-            throw new SyntaxError('[048] Loop statement has not expression.');
+            throw new SyntaxError('[048] Loop command `@` requires an expression.');
         }
 
         self::$commandStack->push('@');
 
         ['a'=>$a, 'i'=>$i, 's'=>$s, 'k'=>$k, 'v'=>$v] = self::loopNames(self::loopDepth());
 
-        return $a.'='.Expression::script().';'
+        return $a.'='. (Expression::script()) .';'
             .'if (is_array('.$a.') and !empty('.$a.')) {'
                 .$s.'=count('.$a.');'
                 .$i.'=-1;'
@@ -418,10 +419,10 @@ class Statement {
     private static function parseIf() {
         if (!self::expressionExists()) {
             self::$rawTag .= ' ]';
-            throw new SyntaxError('[047] if statement has not expression.');
+            throw new SyntaxError('[047] Condition command `?` requires an expression.');
         }
         self::$commandStack->push('?');
-        return 'if ('.Expression::script().') {';
+        return 'if ('. (Expression::script()) .') {';
     }
 
 
@@ -435,7 +436,7 @@ class Statement {
     }
     private static function parseElse() {
         if (self::expressionExists()) {
-            return '} else if ('.Expression::script().') {';
+            return '} else if ('. (Expression::script()) .') {';
         }
 
         self::$commandStack->push(':');    // else
@@ -592,7 +593,7 @@ class Cxt {
  * Used by Expression->isFinished(), it maps each context (Cxt::<CONST>) to valid stopping tokens
  * such as closing brackets or delimiters.
  * 
- * The child expression does not consume $stopCode, which is consumed by parent expression
+ * The child expression does not consume $stopCode, which is consumed by parent expression.
  */
 class CxStop {
     private static $map = [
@@ -648,7 +649,7 @@ class Expression {
                     
     public function preventEmptyExpression($stopCode) {
         if (empty($this->scriptPieces)) {
-            throw new SyntaxError("[013] missing expression before `{$stopCode}`");
+            throw new SyntaxError("[013] Missing expression before `{$stopCode}`");
         }
         return true;
     }
@@ -745,26 +746,29 @@ class Expression {
     }
  
     private function checkTokensOrder($prevToken, $currToken) {
+
+        $tokens = $prevToken['value'] . $currToken['value']; 
+
         if ($prevToken['group'] & (Token::OPERAND|Token::CLOSE) 
             and $currToken['group'] & (Token::OPERAND|Token::UNARY) ) {
-            throw new SyntaxError("[012] Unexpected `{$prevToken['value']}{$currToken['value']}`");
+            throw new SyntaxError("[012] Unexpected `{$tokens}`");
         }
         if ((!$prevToken['group'] || $prevToken['group'] & (Token::OPERATOR|Token::UNARY))
             and $currToken['group'] === Token::OPERATOR) {
             // @note OPEN|CLOSE|DELIMITER are checked in CxStop::isValid()
-            throw new SyntaxError("[011] Unexpected `{$prevToken['value']}{$currToken['value']}`");
+            throw new SyntaxError("[011] Unexpected `{$tokens}`");
         }
         if ($prevToken['group'] === Token::UNARY and $currToken['group']===Token::UNARY) {
-            throw new SyntaxError("[042] Consecutive Unary Operators are not allowed `{$prevToken['value']}{$currToken['value']}`");
+            throw new SyntaxError("[042] Consecutive unary operators not allowed: `{$tokens}`");
         }
         if ($prevToken['group'] === Token::DOT and $currToken['name'] !== 'Name') {
-            throw new SyntaxError("[010] Unexpected `{$prevToken['value']}{$currToken['value']}`");
+            throw new SyntaxError("[010] Unexpected `{$tokens}`");
         }
         if (($prevToken['group'] 
              && !($prevToken['group'] & (Token::OPERATOR|Token::UNARY)) 
              && $prevToken['name'] !== 'Name')
             and $currToken['group']===Token::OPEN) {
-            throw new SyntaxError("[043] Unexpected `{$prevToken['value']}{$currToken['value']}`");
+            throw new SyntaxError("[043] Unexpected `{$tokens}`");
         }
 
     }
@@ -781,11 +785,11 @@ class Expression {
         }
     }
  
-    public function insertValWrapper() {
+    public function insertWrapper() {
         if ($this->wrapperStartIndex === -1) {
-            throw new FatalError('[003] TplusScripter internal bug: fails to parse val wrapper method.');
+            throw new FatalError('[003] TplusScripter internal bug: failed to parse wrapper method.');
         }
-        array_splice($this->scriptPieces, $this->wrapperStartIndex, 0, Scripter::$valWrapper.'::_o(');
+        array_splice($this->scriptPieces, $this->wrapperStartIndex, 0, Scripter::$wrapper.'::o(');
     }
 
     private function parseParenthesisOpen($prevToken, $currToken) {
@@ -851,7 +855,7 @@ class Expression {
         return $currToken['value'];
     }
     private function parseXcrement($prevToken, $currToken) {
-        throw new SyntaxError('[020] increment ++ or decrement -- operators are not allowd.');
+        throw new SyntaxError('[020] The increment `++` and decrement `--` operators are not allowed.');
     }
     private function parseComparison($prevToken, $currToken) {
         return $currToken['value'];  // === == !== != < > <= >=     @todo check a == b == c
@@ -881,7 +885,7 @@ class Expression {
 
         if ($this->wrapperTrigger) {
             NameDotChain::confirmWrapper($currToken['value'], $this->wrapperTrigger=='Name');
-            $this->insertValWrapper();
+            $this->insertWrapper();
             $this->wrapperTrigger = null;
             return ')->'.$currToken['value'];
         }
@@ -907,13 +911,13 @@ class NameDotChain {
             throw new SyntaxError("[007] unexpected {$name}");
         }
         if ($onlyWrapper and !self::isWrapper($name)) {
-            throw new SyntaxError("[041] Wrapper method {$name}() is not defined in class ".Scripter::$valWrapper);
+            throw new SyntaxError("[041] Wrapper method `{$name}()` is not defined in class `".Scripter::$wrapper."`.");
         }
     }
 
     public static function addDot($token) {
         if (!self::isEmpty() and strlen($token) > 1) { //  multiple dots after Name. e.g) 'abc..' 'xyz...'
-            throw new SyntaxError('[008] Unexpected consecutive dots in expression: '.implode('', self::$tokens).$token);
+            throw new SyntaxError('[008] Unexpected consecutive dots in expression: `'.implode('', self::$tokens).$token . '`');
         }
         self::$tokens[] = $token;
     }
@@ -922,11 +926,11 @@ class NameDotChain {
         self::$expression = $expression;
         if (in_array($token, ['true', 'false', 'null', 'this'])) {
             if (!self::isEmpty() or self::isFunc()) {
-                throw new SyntaxError("[021] `{$token}` is reserved word.");
+                throw new SyntaxError("[021] Reserved word `{$token}` cannot be used here.");
             }
             if ($token !== 'this') { 
                 if (self::isNextDot()) {
-                    throw new SyntaxError("[022] `{$token}` is reserved word.");
+                    throw new SyntaxError("[022] Reserved word `{$token}` cannot be used here.");
                 }
                 return $token;
             }
@@ -968,7 +972,7 @@ class NameDotChain {
         return preg_match('/^\s*\(/', Scripter::$userCode);
     }
     private static function isWrapper($method) {
-        return in_array(strtolower($method), Scripter::valWrapperMethods());
+        return in_array(strtolower($method), Scripter::wrapperMethods());
     }
 
     private static function parseAutoGlobals() {
@@ -1006,11 +1010,11 @@ class NameDotChain {
             if (count($names) === 1) {
                 return '$this';
             }
-            throw new SyntaxError('[025] access to object property is not allowd.'); // this.prop
+            throw new SyntaxError('[025] Access to object property is not allowed.'); // this.prop
         }
         $method = array_pop($names);
         if (count($names) !== 1) {
-            throw new SyntaxError('[026] access to object property is not allowd.');  // this.prop.foo()
+            throw new SyntaxError('[026] Access to object property is not allowed.');  // this.prop.foo()
         }
         return '$this->'.$method;     // this.method()
     }
@@ -1022,7 +1026,7 @@ class NameDotChain {
         $loopDepth = strlen(array_shift($tokens));
 
         if ($loopDepth > Statement::loopDepth()) {
-            throw new SyntaxError('[027] depth of loop member "'.implode('', self::$tokens).'" is not correct.');
+            throw new SyntaxError('[027] Loop‐member depth is invalid: `'.implode('', self::$tokens).'`');
         }
 
         if (in_array($names[0], ['i', 's', 'k'])) {
@@ -1045,10 +1049,10 @@ class NameDotChain {
         if (count($names)===2 and self::isFunc()) {
             if (!self::isWrapper($names[1])) {
                 //@note i,s and k cannot be object and so cannot have non-wrapper method.
-                throw new FatalError("[029] ".Scripter::$valWrapper." doesn't have method {$names[1]}()");
+                throw new FatalError("[029] Wrapper class ".Scripter::$wrapper." does not define method `{$names[1]}()`");
             }
 
-            self::$expression->insertValWrapper();
+            self::$expression->insertWrapper();
 
             return Statement::loopName($loopDepth, $names[0]).')->'.$names[1];
         }
@@ -1061,11 +1065,11 @@ class NameDotChain {
         }
         $helperMethod = strtolower($names[1]);
         if (!in_array($helperMethod, Scripter::loopHelperMethods())) {
-            throw new FatalError('[031] loop helper method '.$helperMethod.'() is not defined.');
+            throw new FatalError('[031] Loop-helper method `'.$helperMethod.'()` is not defined.');
         }
         ['a'=>$a, 'i'=>$i, 's'=>$s, 'k'=>$k, 'v'=>$v] = Statement::loopNames($loopDepth);
         
-        return Scripter::$loopHelper.'::_o('.$i.','.$s.','.$k.','.$v.')->'.$names[1];
+        return Scripter::$loopHelper.'::o('.$i.','.$s.','.$k.','.$v.')->'.$names[1];
     }
     private static function _parseV($names, $loopDepth) {
         if ($names[0]==='v') {
@@ -1113,7 +1117,7 @@ class NameDotChain {
         $func = self::$names[0];
         if (!function_exists($func) and !in_array($func,['isset','empty'])) {
             Statement::$rawTag.='(';
-            throw new SyntaxError("[034] function `{$func}()` is not defined.");
+            throw new SyntaxError("[034] Function `{$func}()` is not defined.");
         }
         return $func;
     }
@@ -1162,11 +1166,11 @@ class NameDotChain {
 
     private static function wrapIfNeeded($script, $method, $onlyWrapper = false) {
         if (self::isWrapper($method)) {
-            self::$expression->insertValWrapper();
+            self::$expression->insertWrapper();
             return $script . ')->' . $method;
         }
         if ($onlyWrapper) {
-            throw new FatalError("[023] Wrapper method `".Scripter::$valWrapper."::{$method}()` is not defined in `".implode('', self::$tokens)."`");
+            throw new FatalError("[023] Wrapper class `".Scripter::$wrapper."` does not define method `{$method}()`");
         }
         return $script . '->' . $method;
     }

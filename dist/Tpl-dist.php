@@ -34,52 +34,34 @@ class Tpl {
 			'AssignCheck' => true
 		];
 	}
-
-	public static function get($path, $vals=[]) {
+	public static function get($path, $data=[]) {
 		$_ = self::_();
-		$_->assign($vals);
+		$_->assign($data);
 		return $_->fetch($path);
 	}
-
 	public static function _() {
-
 		return new Tplus(static::config());
 	}
 }
 
+class TplWrapper extends TplusWrapper {
 
-class TplValWrapper extends TplusValWrapper {
+	protected $x;
 
-	protected $val;
-
-	public function shuffle() {
-		if (is_array($this->val)) {
-			shuffle($this->val);
-			return $this->val;
-		}
-		return str_shuffle((string)$this->val);
-	}
-
-	public function average() {
-		if (is_array($this->val)) {
-			return array_sum($this->val) / count($this->val);
-		}
-		throw new TplusRuntimeError(
-			'average() method called on unsupported type '.gettype($this->val)
-		);
-	}
-	
-	public function format($decimals=0, $decimal_separator=".", $thousands_seperator=",") {
-		if (is_array($this->val)) {
-			return parent::iterate(__FUNCTION__, $decimals, $decimal_separator, $thousands_seperator);
-		}
-		return number_format($this->val, $decimals, $decimal_separator, $thousands_seperator);
-	}
 	public function double() {
-		if (is_array($this->val)) {
-			return parent::iterate(__FUNCTION__);
+		return $this->x * 2;
+	}
+	public function average() {
+		if (is_array($this->x)) {
+			return array_sum($this->x) / count($this->x);
 		}
-		return $this->val * 2;
+	}
+	public function shuffle() {
+		if (is_array($this->x)) {
+			shuffle($this->x);
+			return $this->x;
+		}
+		return str_shuffle((string)$this->x);
 	}
 }
 

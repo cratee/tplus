@@ -26,7 +26,7 @@ class Tplus {
 
         } else if (!is_file($scriptPath)) {
             trigger_error(
-                "Tpl config 'ScriptCheck' => false and Tplus cannot find <b> ".$scriptPath.'</b>',
+                "Tpl config `'ScriptCheck' => false` but Tplus cannot find Script file: `{$scriptPath}`",
                 E_USER_ERROR
             );
         }
@@ -56,7 +56,6 @@ class Tplus {
         $htmlPath = $this->config['HtmlRoot'].$path;
 
         if (!$this->isScriptValid($htmlPath, $scriptPath)) {
-            //$this->script($this->config, $htmlPath, $scriptPath);
             $this->script($htmlPath, $scriptPath);
         }
     }
@@ -64,7 +63,7 @@ class Tplus {
     private function isScriptValid($htmlPath, $scriptPath) {        
 		if (!is_file($htmlPath)) {
 			trigger_error(
-                "Tpl config 'ScriptCheck' => true and Tplus cannot find <b> ".$htmlPath.'</b>', 
+                "Tpl config `'ScriptCheck' => true` but Tplus cannot find HTML file: `{$htmlPath}`",
                 E_USER_ERROR
             );
 		}
@@ -134,11 +133,11 @@ class Tplus {
 }
 
 
-class TplusValWrapper {
+class TplusWrapper {
     
     static protected $instance;
 
-    public static function _o($val) {
+    final public static function o($val) {
         if (is_object($val)) {
             return $val;
         }
@@ -148,16 +147,6 @@ class TplusValWrapper {
         static::$instance->val = $val;
         return static::$instance;
     }
-
-    protected function iterate() {
-		$args = func_get_args();
-		$method = array_shift($args);
-		$arr = [];
-		foreach ($this->val as $el) {
-			$arr[] = call_user_func_array([static::_o($el), $method], $args);
-		}
-		return $arr;
-	}
 
     public function esc() {
         return htmlspecialchars($this->val);
@@ -186,8 +175,6 @@ class TplusValWrapper {
     public function concat() {
         return $this->val . implode('',func_get_args());
     }
-  
-    //format round ceil floor
 }
 
 
@@ -195,7 +182,7 @@ class TplusLoopHelper {
 
     static protected $instance;
 
-    public static function _o($i, $s, $k, $v) {
+    final public static function o($i, $s, $k, $v) {
         if (empty(static::$instance)) {
             static::$instance = new static;
         }
@@ -206,5 +193,3 @@ class TplusLoopHelper {
         return static::$instance;
     }
 }
-
-class TplusRuntimeError extends \Exception {}

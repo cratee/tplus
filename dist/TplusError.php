@@ -177,7 +177,7 @@ div.tplus-fatal{background:#16a;color:#bdf;}
 <?php }?>
 <tr>
     <td class="tplus-error-item">File</td>
-    <td class="tplus-error-content"><?=$file?></td>
+    <td class="tplus-error-content"><?=htmlspecialchars($file)?></td>
 </tr>
 <tr>
     <td class="tplus-error-item">Line</td>
@@ -186,11 +186,11 @@ div.tplus-fatal{background:#16a;color:#bdf;}
 <?php if ($code) {?>
 <tr>
     <td class="tplus-error-item">Code</td>
-    <td class="tplus-error-content"><code class="tplus-error-code"><?=$code?></code></td>
+    <td class="tplus-error-content"><code class="tplus-error-code"><?=htmlspecialchars($code)?></code></td>
 </tr>
 <?php }?>
 <tr>
-    <td class="tplus-error-item"><?=$messageTitle?></td><td class="tplus-error-content"><?=$message?></td>
+    <td class="tplus-error-item"><?=$messageTitle?></td><td class="tplus-error-content"><?=htmlspecialchars($message)?></td>
 </tr>
 </table>
 </div>
