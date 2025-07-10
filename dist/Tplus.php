@@ -3,7 +3,7 @@
 class Tplus {
     
     const SCRIPT_SIZE_PAD = 9;
-    const VERSION = '1.1.1';
+    const VERSION = '1.1.2';
 
     private $config;
     private $vals=[];
