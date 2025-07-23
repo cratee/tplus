@@ -190,7 +190,7 @@ div.tplus-fatal{background:#16a;color:#bdf;}
 </tr>
 <?php }?>
 <tr>
-    <td class="tplus-error-item"><?=$messageTitle?></td><td class="tplus-error-content"><?=htmlspecialchars($message)?></td>
+    <td class="tplus-error-item"><?=$messageTitle?></td><td class="tplus-error-content"><?=$message?></td>
 </tr>
 </table>
 </div>
