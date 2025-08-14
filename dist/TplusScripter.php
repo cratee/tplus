@@ -564,7 +564,7 @@ class Cxt {
             case self::JKT_COLON : return self::JKT_COMMA;
         }
         throw new SyntaxError('[018] Invalid token: `,`'); 
-        // This excetion should never be reached. Token `,` already validated by CxStop::isValid().
+        // This exception should never be reached. Token `,` already validated by CxStop::isValid().
     }
     private static function colon($cxt) {
         switch ($cxt) {
@@ -575,7 +575,7 @@ class Cxt {
             case self::JKT_COMMA : return self::JKT_COLON;
         }
         throw new SyntaxError('[017]Invalid token: `:`');
-        // This excetion should never be reached. Token `:` already validated by CxStop::isValid().
+        // This exception should never be reached. Token `:` already validated by CxStop::isValid().
     }
     private static function ternary($prevToken, $currToken, $cxt) {
         if ($prevToken['group'] & (Token::OPERAND | Token::CLOSE) 
@@ -1112,8 +1112,7 @@ class NameDotChain {
         }
         return self::_parseConst(self::$names);
     }
- 
-    private static function _parseFunc() {
+     private static function _parseFunc() {
         $func = self::$names[0];
         if (!function_exists($func) and !in_array($func,['isset','empty'])) {
             Statement::$rawTag.='(';
@@ -1121,7 +1120,6 @@ class NameDotChain {
         }
         return $func;
     }
-
     private static function _parseConstWithWrapperFunc() {
         $names = self::$names;
         $func = array_pop($names);
@@ -1133,7 +1131,6 @@ class NameDotChain {
 
         return self::wrapIfNeeded($script, $func, true);
     }
-
     private static function _parseStaticMethod($class, $method) {
         $script = $class.'::'.$method;
         if (!method_exists($class, $method)) {
@@ -1142,7 +1139,6 @@ class NameDotChain {
         }
         return $script;
     }
-  
     private static function _parseNsFuncOrArrayWithWrapper($names, $path, $func) {
         $script = $path.'\\'.$func;
         
@@ -1152,29 +1148,6 @@ class NameDotChain {
 
         return self::parseArray($names, $func);
     }
-
-    private static function parseArray($names, $func=null) {
-        $script = '$V';
-        foreach ($names as $name) {
-            $script .= "['{$name}']";
-        }
-        return $func
-            ? self::wrapIfNeeded($script, $func)
-            : $script;
-    }
-
-
-    private static function wrapIfNeeded($script, $method, $onlyWrapper = false) {
-        if (self::isWrapper($method)) {
-            self::$expression->insertWrapper();
-            return $script . ')->' . $method;
-        }
-        if ($onlyWrapper) {
-            throw new FatalError("[023] Wrapper class `".Scripter::$wrapper."` does not define method `{$method}()`");
-        }
-        return $script . '->' . $method;
-    }
-
     private static function _parseConst($names) {
         $path = '';
         $constName = null;
@@ -1214,5 +1187,26 @@ class NameDotChain {
     }
     private static function _constName($name) {
         return preg_match('/^[A-Z][A-Z0-9_]*$/', $name);
+    }
+
+    private static function parseArray($names, $func=null) {
+        $script = '$V';
+        foreach ($names as $name) {
+            $script .= "['{$name}']";
+        }
+        return $func
+            ? self::wrapIfNeeded($script, $func)
+            : $script;
+    }
+
+    private static function wrapIfNeeded($script, $method, $onlyWrapper = false) {
+        if (self::isWrapper($method)) {
+            self::$expression->insertWrapper();
+            return $script . ')->' . $method;
+        }
+        if ($onlyWrapper) {
+            throw new FatalError("[023] Wrapper class `".Scripter::$wrapper."` does not define method `{$method}()`");
+        }
+        return $script . '->' . $method;
     }
 }
