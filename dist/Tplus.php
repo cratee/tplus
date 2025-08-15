@@ -52,7 +52,7 @@ class Tplus {
 
         } finally {
             if (ob_get_level() > $ob_level) {
-                @ob_end_clean();
+                @ob_end_flush();
             }
 
             if ($start_tpl) {
