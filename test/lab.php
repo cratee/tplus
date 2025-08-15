@@ -1,14 +1,6 @@
-<?="a"?>
-<?="b"?>
-
-<?="a"?>
-
-<?="b"?>
-
-
-
 <?php  
-
+echo dirname(__file__)."</br>";
+echo __DIR__;
 exit;
 
 
@@ -152,3 +144,11 @@ code.sss-error-level2 {background:#38c;color:#def}
 echo $qqqqqqqq;
 
 echo $aaa->bbb();
+?>
+
+<?="a"?>
+<?="b"?>
+
+<?="a"?>
+
+<?="b"?>

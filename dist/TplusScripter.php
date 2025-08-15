@@ -67,7 +67,7 @@ class Scripter {
             error_log($title. $message.' in '.$htmlPath.' on line '.$currentLine);
         }
         if (ini_get('display_errors')) {
-            include_once dirname(__file__).'/TplusError.php';
+            include_once __DIR__.'/TplusError.php';
             \TplusErrorToBrowser::display(
                 $htmlPath,
                 $currentLine,

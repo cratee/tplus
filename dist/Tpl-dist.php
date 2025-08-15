@@ -1,6 +1,6 @@
 <?php
 
-include_once dirname(__file__).'/Tplus.php';
+include_once __DIR__.'/Tplus.php';
 
 class Tpl {	
 	protected static function config() {

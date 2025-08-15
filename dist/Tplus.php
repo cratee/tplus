@@ -8,7 +8,7 @@ class Tplus {
     private $config;
     private $data=[];
     private $phpReport;
-    private $renderDepth=0;
+    private static $renderDepth=0;
 
     public function __construct($config) {
         $this->config = $config;
@@ -37,8 +37,8 @@ class Tplus {
         $ob_level = ob_get_level();
         ob_start();
         
-        $start_tpl = ($this->renderDepth === 0);
-        $this->renderDepth++;
+        $start_tpl = (self::$renderDepth === 0);
+        self::$renderDepth++;
 
         if ($start_tpl) {
             $this->stopAssignCheck();
@@ -52,6 +52,7 @@ class Tplus {
 
         } finally {
             if (ob_get_level() > $ob_level) {
+            // flush buffer on exception to preserve previously printed CSS/error box.
                 @ob_end_flush();
             }
 
@@ -60,14 +61,14 @@ class Tplus {
                 $this->startAssignCheck();
             }
 
-            $this->renderDepth--;
+            self::$renderDepth--;
         }
 
         return $render_result;
     }
 
     /**
-     * @deprecated since v1.1.3 This method is kept for backward compatibility.
+     * @deprecated since v1.1.3 this method is kept for backward compatibility.
      *             Use get($path) instead.
      *
      * fetch() is alias of get() for loading sub-templates.
@@ -77,7 +78,7 @@ class Tplus {
     }
 
     private function script($htmlPath, $scriptPath) {
-        include_once dirname(__file__).'/TplusScripter.php';
+        include_once __DIR__.'/TplusScripter.php';
         \Tplus\Scripter::script(
             $htmlPath, 
             $scriptPath, 
@@ -130,13 +131,13 @@ class Tplus {
     private function setErrorHandler() {
         set_error_handler(function($type, $message, $file, $line) {
             if (error_reporting() & $type) {
-                include_once dirname(__file__).'/TplusError.php';
+                include_once __DIR__.'/TplusError.php';
                 \TplusError::handle(['type'=>$type, 'message'=>$message, 'file'=>$file, 'line'=>$line]);
             }
         });
 
         register_shutdown_function(function() {            
-            include_once dirname(__file__).'/TplusError.php';
+            include_once __DIR__.'/TplusError.php';
             \TplusError::handle(error_get_last());
         });
     }
