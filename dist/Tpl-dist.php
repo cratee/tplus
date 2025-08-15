@@ -37,7 +37,7 @@ class Tpl {
 	public static function get($path, $data=[]) {
 		$_ = self::_();
 		$_->assign($data);
-		return $_->fetch($path);
+		return $_->get($path);
 	}
 	public static function _() {
 		return new Tplus(static::config());

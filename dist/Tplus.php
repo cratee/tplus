@@ -3,11 +3,12 @@
 class Tplus {
     
     const SCRIPT_SIZE_PAD = 9;
-    const VERSION = '1.1.2';
+    const VERSION = '1.1.3';
 
     private $config;
     private $data=[];
     private $phpReport;
+    private $renderDepth=0;
 
     public function __construct($config) {
         $this->config = $config;
@@ -18,7 +19,7 @@ class Tplus {
         return '';
     }
 
-    public function fetch($path) {
+    public function get($path) {
         $scriptPath = $this->config['HtmlScriptRoot'].$path.'.php';
         
         if ($this->config['ScriptCheck']) {
@@ -32,13 +33,47 @@ class Tplus {
         }
 
         $V = &$this->data;
+
+        $ob_level = ob_get_level();
         ob_start();
-        $this->stopAssignCheck();
-        $this->setErrorHandler();
-		include $scriptPath;
-        $this->unsetErrorHandler();
-        $this->startAssignCheck();
-        return ob_get_clean();
+        
+        $start_tpl = ($this->renderDepth === 0);
+        $this->renderDepth++;
+
+        if ($start_tpl) {
+            $this->stopAssignCheck();
+            $this->setErrorHandler();         
+        }
+
+        try {
+            $render_result = '';
+            require $scriptPath;
+            $render_result = ob_get_clean();
+
+        } finally {
+            if (ob_get_level() > $ob_level) {
+                @ob_end_clean();
+            }
+
+            if ($start_tpl) {
+                $this->unsetErrorHandler();
+                $this->startAssignCheck();
+            }
+
+            $this->renderDepth--;
+        }
+
+        return $render_result;
+    }
+
+    /**
+     * @deprecated since v1.1.3 This method is kept for backward compatibility.
+     *             Use get($path) instead.
+     *
+     * fetch() is alias of get() for loading sub-templates.
+     */
+    public function fetch($path) {
+        return $this->get($path);
     }
 
     private function script($htmlPath, $scriptPath) {
