@@ -1,8 +1,8 @@
 <?php
 /**
  *  ------------------------------------------------------------------------------
- *  Tplus 1.1.3
- *  Released 2025-08-15
+ *  Tplus 1.1.3-p2
+ *  Released 2025-08-18
  * 
  * 
  *  The MIT License (MIT)
@@ -214,6 +214,7 @@ class Scripter {
     }
 
     private static function getHtml($htmlPath) {
+
         $html = file_get_contents($htmlPath);
         
         // remove UTF-8 BOM

@@ -3,7 +3,7 @@
 class Tplus {
     
     const SCRIPT_SIZE_PAD = 9;
-    const VERSION = '1.1.3';
+    const VERSION = '1.1.3-p2';
 
     private $config;
     private $data=[];
@@ -33,16 +33,28 @@ class Tplus {
 
 
     public function get($path) {
+        $htmlPath   = $this->config['HtmlRoot'].$path;
         $scriptPath = $this->config['HtmlScriptRoot'].$path.'.php';
         
+
         if ($this->config['ScriptCheck']) {
-            $this->checkScript($path, $scriptPath);
+            if (!is_file($htmlPath)) {
+                trigger_error(
+                    "Tpl config `'ScriptCheck' => true` but Tplus cannot find HTML file: `{$htmlPath}`",
+                    E_USER_ERROR
+                );
+                return '';
+            }
+            if ($this->needsScripting($htmlPath, $scriptPath)) {
+                $this->script($htmlPath, $scriptPath);
+            }
 
         } else if (!is_file($scriptPath)) {
             trigger_error(
                 "Tpl config `'ScriptCheck' => false` but Tplus cannot find Script file: `{$scriptPath}`",
                 E_USER_ERROR
             );
+            return '';
         }
 
         $V = &$this->data;
@@ -89,6 +101,7 @@ class Tplus {
         return $this->get($path);
     }
 
+    
     private function script($htmlPath, $scriptPath) {
         require_once __DIR__.'/TplusScripter.php';
         \Tplus\Scripter::script(
@@ -100,41 +113,24 @@ class Tplus {
         );
     }
 
-    private function checkScript($path, $scriptPath) {
-        $htmlPath = $this->config['HtmlRoot'].$path;
-
-        if (!$this->isScriptValid($htmlPath, $scriptPath)) {
-            $this->script($htmlPath, $scriptPath);
-        }
-    }
-    
-    private function isScriptValid($htmlPath, $scriptPath) {        
-		if (!is_file($htmlPath)) {
-			trigger_error(
-                "Tpl config `'ScriptCheck' => true` but Tplus cannot find HTML file: `{$htmlPath}`",
-                E_USER_ERROR
-            );
-		}
+    private function needsScripting($htmlPath, $scriptPath) {
         if (!is_file($scriptPath)) {
-            return false;
+            return true;
         }
 
-        return $this->isScriptUpdated($htmlPath, $scriptPath);
-    }
-
-    private function isScriptUpdated($htmlPath, $scriptPath) {
 		$headerExpected = $this->scriptHeader($htmlPath);
         $headerWritten = file_get_contents(
             $scriptPath, false, null, 0, 
             strlen($headerExpected) + self::SCRIPT_SIZE_PAD
         );
 
-        return (
+        return !(
             strlen($headerWritten) > self::SCRIPT_SIZE_PAD
             and $headerExpected == substr($headerWritten, 0, -self::SCRIPT_SIZE_PAD)
-            and filesize($scriptPath) == (int)substr($headerWritten,-self::SCRIPT_SIZE_PAD) 
+            and filesize($scriptPath) == (int)substr($headerWritten, -self::SCRIPT_SIZE_PAD) 
         );
     }
+
     private function scriptHeader($htmlPath) {
 		$fileMTime = @date('Y-m-d H:i:s', filemtime($htmlPath));
 		return '<?php /* Tplus '.self::VERSION.' '.$fileMTime.' '.realpath($htmlPath).' ';
