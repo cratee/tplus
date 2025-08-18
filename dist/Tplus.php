@@ -14,23 +14,20 @@ class Tplus {
         $this->config = $config;
     }
 
-    /*public function assign($data) {
-        $this->data = array_merge($this->data, $data);
-        return '';
-    }*/
 
     public function assign($keyOrArray, $val=null) {
         if (is_array($keyOrArray)) {
             $this->data = array_merge($this->data, $keyOrArray);
+
         } else if (is_string($keyOrArray)) {
             $this->data[$keyOrArray] = $val;
+
         } else {
             trigger_error("assign() expects array or string.", E_USER_ERROR);
-            //throw new InvalidArgumentException("assign() expects array or string.");
         }
+
         return '';
     }
-
 
     public function get($path) {
         $htmlPath   = $this->config['HtmlRoot'].$path;
