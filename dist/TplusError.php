@@ -18,6 +18,17 @@ class TplusError {
 
         [$file, $line, $code] = self::getTplErrorInfo($e['file'], $e['line']);
 
+
+        if (!$file) {
+            $trace = debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS);
+            foreach ($trace as $fr) {
+                if (!empty($fr['file']) && !empty($fr['line'])) {
+                    [$f,$l,$c] = self::getTplErrorInfo($fr['file'], $fr['line']);
+                    if ($f) { $file=$f; $line=$l; $code=$c; break; }
+                }
+            }
+        }
+
         $runtimeType = self::getErrorType($e['type']);
 
         if ($file) {
@@ -128,9 +139,11 @@ class TplusErrorToBrowser {
         }
         $titleClass = $runtimeType ? 'tplus-runtime-title': 'tplus-scripter-title';
 
-        $message = str_replace("\n","<br />\n", htmlspecialchars($message));
+        $file = self::esc((string)$file);
+        $code = self::esc((string)$code);
+        $message = nl2br(self::esc($message), false);
+
         $messageTitle = $runtimeType ? 'PHP Message' : 'Message';
-        $code = htmlspecialchars($code);
 
         if ( ! self::$count) {
 ?>
@@ -181,12 +194,12 @@ div.tplus-fatal{background:#16a;color:#bdf;}
 </tr>
 <tr>
     <td class="tplus-error-item">Line</td>
-    <td class="tplus-error-content"><?=$line?></td>
+    <td class="tplus-error-content"><?=(string)$line?></td>
 </tr>
 <?php if ($code) {?>
 <tr>
     <td class="tplus-error-item">Code</td>
-    <td class="tplus-error-content"><code class="tplus-error-code"><?=htmlspecialchars($code)?></code></td>
+    <td class="tplus-error-content"><code class="tplus-error-code"><?=$code?></code></td>
 </tr>
 <?php }?>
 <tr>
@@ -198,5 +211,8 @@ div.tplus-fatal{background:#16a;color:#bdf;}
 <?php 
     }
 
+    private static function esc($s) {
+        return htmlspecialchars($s, ENT_NOQUOTES | ENT_SUBSTITUTE, 'UTF-8', false);
+    }
 
 }

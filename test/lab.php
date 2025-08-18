@@ -1,9 +1,4 @@
 <?php  
-echo dirname(__file__)."</br>";
-echo __DIR__;
-exit;
-
-
 include '../dist/Tpl-dist.php';
 
 echo \Tpl::get('lab.html', []);

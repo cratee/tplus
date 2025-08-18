@@ -6,6 +6,13 @@
 	</style>
 </head>
 <body>
+[=this.assign({"a":1,"b":2})]
+[=this.assign("c",3)]
+[* bad (의도적으로 에러) *]
+[=this.assign(123,'456')]
+[=this.get("no-such.html", 1, '&2')]
+
+
 
 <table>
 
@@ -458,7 +465,7 @@
 [= Widget.Calender.MONTH.march.double()]
 
 <br/><br/>
-[= "a < b".esc()]
+[= "a < b".esc()] xx
 
 
 

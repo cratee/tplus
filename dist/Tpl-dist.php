@@ -1,6 +1,6 @@
 <?php
 
-include_once __DIR__.'/Tplus.php';
+require_once __DIR__.'/Tplus.php';
 
 class Tpl {	
 	protected static function config() {
@@ -35,9 +35,9 @@ class Tpl {
 		];
 	}
 	public static function get($path, $data=[]) {
-		$_ = self::_();
-		$_->assign($data);
-		return $_->get($path);
+		$tplus = self::_();
+		$tplus->assign($data);
+		return $tplus->get($path);
 	}
 	public static function _() {
 		return new Tplus(static::config());

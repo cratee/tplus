@@ -14,10 +14,23 @@ class Tplus {
         $this->config = $config;
     }
 
-    public function assign($data) {
+    /*public function assign($data) {
         $this->data = array_merge($this->data, $data);
         return '';
+    }*/
+
+    public function assign($keyOrArray, $val=null) {
+        if (is_array($keyOrArray)) {
+            $this->data = array_merge($this->data, $keyOrArray);
+        } else if (is_string($keyOrArray)) {
+            $this->data[$keyOrArray] = $val;
+        } else {
+            trigger_error("assign() expects array or string.", E_USER_ERROR);
+            //throw new InvalidArgumentException("assign() expects array or string.");
+        }
+        return '';
     }
+
 
     public function get($path) {
         $scriptPath = $this->config['HtmlScriptRoot'].$path.'.php';
@@ -52,7 +65,6 @@ class Tplus {
 
         } finally {
             if (ob_get_level() > $ob_level) {
-            // flush buffer on exception to preserve previously printed CSS/error box.
                 @ob_end_flush();
             }
 
@@ -78,7 +90,7 @@ class Tplus {
     }
 
     private function script($htmlPath, $scriptPath) {
-        include_once __DIR__.'/TplusScripter.php';
+        require_once __DIR__.'/TplusScripter.php';
         \Tplus\Scripter::script(
             $htmlPath, 
             $scriptPath, 
@@ -131,13 +143,13 @@ class Tplus {
     private function setErrorHandler() {
         set_error_handler(function($type, $message, $file, $line) {
             if (error_reporting() & $type) {
-                include_once __DIR__.'/TplusError.php';
+                require_once __DIR__.'/TplusError.php';
                 \TplusError::handle(['type'=>$type, 'message'=>$message, 'file'=>$file, 'line'=>$line]);
             }
         });
 
         register_shutdown_function(function() {            
-            include_once __DIR__.'/TplusError.php';
+            require_once __DIR__.'/TplusError.php';
             \TplusError::handle(error_get_last());
         });
     }

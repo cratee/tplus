@@ -67,7 +67,7 @@ class Scripter {
             error_log($title. $message.' in '.$htmlPath.' on line '.$currentLine);
         }
         if (ini_get('display_errors')) {
-            include_once __DIR__.'/TplusError.php';
+            require_once __DIR__.'/TplusError.php';
             \TplusErrorToBrowser::display(
                 $htmlPath,
                 $currentLine,
@@ -562,6 +562,7 @@ class Cxt {
             case self::JKT_COMMA : return self::JKT_COMMA;
             case self::JCE_COLON : return self::JCE_COMMA;
             case self::JKT_COLON : return self::JKT_COMMA;
+            case self::FUN_COMMA : return self::FUN_COMMA;
         }
         throw new SyntaxError('[018] Invalid token: `,`'); 
         // This exception should never be reached. Token `,` already validated by CxStop::isValid().

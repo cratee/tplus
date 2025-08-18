@@ -123,3 +123,7 @@ $vals = [
 echo Tpl::get('index.html', $vals);
 
 echo Tpl::get('subdir/file.html', $vals);
+
+
+$tplus = Tpl::_();
+$tplus->assign(123);

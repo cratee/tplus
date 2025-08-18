@@ -1,7 +1,12 @@
 
+<div>[=fooo{3}] [\=aaa)] [=fooo[3]]  </div>
+
+[\= Widget.Calender.MONTH.march.double()]
 
 
+[=this.assign({"a":1,"b":2})]
+[=this.assign("c",3)]
+[* bad (의도적으로 에러) *]
+[=this.assign(123,456)]
 
-<div>[=fooo{3}] [=aaa)] [=fooo[3]]  </div>
-
-[= Widget.Calender.MONTH.march.double()]
+[=this.get("no-such.html", 'abc', "qq")]
