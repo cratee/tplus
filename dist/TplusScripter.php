@@ -615,7 +615,7 @@ class CxStop {
         Cxt::JKT_COLON  => ['check' => [',', ']']],
         Cxt::TRN_COLON  => ['check' => [',', ')', ']', '}']],
     ];
-    public static function isValid($parentCxt, $stopCode, $expession) {
+    public static function isValid($parentCxt, $stopCode, $expression) {
         if (!$parentCxt and $stopCode === ']') { // end tag
             return true;
         }
@@ -628,7 +628,7 @@ class CxStop {
         }
 
         if (!empty($map['check']) and in_array($stopCode, $map['check'])) {
-            return $expession->preventEmptyExpression($stopCode);
+            return $expression->preventEmptyExpression($stopCode);
         }
 
         Statement::$rawTag .= $stopCode;
@@ -884,11 +884,12 @@ class Expression {
 
     private function parseName($prevToken, $currToken) { // variable, function, object, method, array, key, namespace, class
         if ($this->wrapperTrigger) {
+            //NameDotChain::confirmWrapper($currToken['value'], $this->wrapperTrigger=='Name');                 //// ????
             //NameDotChain::confirmWrapper($currToken['value'], $this->wrapperTrigger=='Name');
             //$this->insertWrapper();
             $name = $currToken['value'];
             if ($this->wrapperTrigger === 'ParenthesisClose') {
-                Checker::assertFunc();    
+                Checker::assertFunc($name);                                                                          //// ????
             } else {
                 Checker::assertWrapper($currToken['value']);
             }
@@ -920,13 +921,13 @@ class Checker {
     public static function isWrapper($method) {    // $method has already been conirmed as func name.
         return in_array(strtolower($method), Scripter::wrapperMethods());
     }
-    public static function assertFunc() {
+    public static function assertFunc($name) {
         if (!self::isFunc()) {
             throw new SyntaxError("[007] unexpected {$name}");
         }
     }
     public static function assertWrapper($name) {
-        self::assertFunc();
+        self::assertFunc($name);
         if (!self::isWrapper($name)) {
             throw new FatalError("[041] Wrapper method `{$name}()` is not defined in class `".Scripter::$wrapper."`.");
         }
@@ -970,9 +971,7 @@ class NameDotFuncChain {
         self::$tokens[] = $token;
     }
 
-    public static function addName($token, $expression) {
-
-        self::$expression = $expression;
+    public static function addName($token) {
         if (in_array($token, ['true', 'false', 'null', 'this'])) {
             if (!empty(self::$tokens) or Checker::isFunc()) {
                 throw new SyntaxError("[021] Reserved word `{$token}` cannot be used here.");
@@ -1130,7 +1129,7 @@ class AutoGlobals {
                 : '$_'.$global;
     
             return $method
-                ? NameDotChain::wrapIfNeeded($script, $method, true)
+                ? NameDotFuncChain::wrapIfNeeded($script, $method, true)
                 : $script;
         }
 
