@@ -3,12 +3,13 @@
 class Tplus {
     
     const SCRIPT_SIZE_PAD = 9;
-    const VERSION = '1.1.3-p2';
+    const VERSION = '1.2.0';
 
     private $config;
     private $data=[];
     private $phpReport;
     private static $renderDepth=0;
+    private static $isShutdownRegistered = false;
 
     public function __construct($config) {
         $this->config = $config;
@@ -141,10 +142,13 @@ class Tplus {
             }
         });
 
-        register_shutdown_function(function() {            
-            require_once __DIR__.'/TplusError.php';
-            \TplusError::handle(error_get_last());
-        });
+        if (!self::$isShutdownRegistered) {
+            register_shutdown_function(function() {            
+                require_once __DIR__.'/TplusError.php';
+                \TplusError::handle(error_get_last());
+            });
+            self::$isShutdownRegistered = true;
+        }
     }
     private function unsetErrorHandler() {
         restore_error_handler();
@@ -169,6 +173,36 @@ class Tplus {
     }
     private function _checkAssign() {
         return !isset($this->config['AssignCheck']) or $this->config['AssignCheck']==true;
+    }
+
+    /**
+     * run Data Chain (Array or Object)
+     * Rename from runAO to runChain for v1.2.0 compatibility
+     */
+    private static function runChain($var, $chain) {
+        if (empty($chain)) return $var;
+        end($chain);
+        $lastIndex = key($chain);
+        foreach ($chain as $i => $name) {
+            if (is_array($var)) {
+                if (!array_key_exists($name, $var)) {
+                    trigger_error("Tplus Runtime: Index `{$name}` not found in array.");
+                    return null;
+                }
+                $var = $var[$name];
+            } else if (is_object($var)) {
+                try {
+                    $var = $var->$name;
+                } catch (\Throwable $e) {
+                    trigger_error("Tplus Runtime: Property `{$name}` not found in object of class " . get_class($var));
+                    return null;
+                }
+            } else if (is_null($var)) {
+                trigger_error("Tplus Runtime: Cannot access key `{$name}` on a null value.");
+                return null;
+            }
+        }
+        return $var;
     }
 
 }
