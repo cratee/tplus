@@ -664,7 +664,7 @@ class Expression {
     private function parse($parentCxt) {
         $afterCx = false;
         $prevToken = ['group'=>0, 'name'=>'', 'value'=>''];
-        NameDotFuncChain::init();
+        NameDotChain::init();
 
         for (;;) {
             if ($this->isFinished($parentCxt, $afterCx)) {
@@ -685,7 +685,7 @@ class Expression {
             $this->setWrapperStartIndex($currToken);
 
             if (!in_array($currToken['name'], ['Name', 'Dot'])) {
-                NameDotFuncChain::init();
+                NameDotChain::init();
             }
 
             $this->scriptPieces[] = $this->{'parse'.$currToken['name']}($prevToken, $currToken);
@@ -876,39 +876,37 @@ class Expression {
     private function parseDot($prevToken, $currToken) {
         if ($prevToken['group']===Token::CLOSE  or
             $prevToken['group']===Token::OPERAND && $prevToken['name']!=='Name') {
-            $this->wrapperTrigger = $prevToken['name'];
+            // ParenthesisClose | BraceClose | BracketClose | Number | Quoted 
+
+            $this->wrapperTrigger = $prevToken['name']; 
+            // safe mandatory name after dot. 
+            
             return;
         }
-        NameDotFuncChain::addDot($currToken['value']);
+        NameDotChain::addDot($currToken['value']);
     }
 
-    private function parseName($prevToken, $currToken) { // variable, function, object, method, array, key, namespace, class
+    private function parseName($prevToken, $currToken) { 
+    // Name: variable | function | array | key | object | prop | method | namespace | class | keyword
         if ($this->wrapperTrigger) {
-            //NameDotChain::confirmWrapper($currToken['value'], $this->wrapperTrigger=='Name');                 //// ????
-            //NameDotChain::confirmWrapper($currToken['value'], $this->wrapperTrigger=='Name');
-            //$this->insertWrapper();
+            // .name after ParenthesisClose | BraceClose | BracketClose | Number | Quoted 
             $name = $currToken['value'];
             if ($this->wrapperTrigger === 'ParenthesisClose') {
                 Checker::assertFunc($name);                                                                          //// ????
             } else {
-                Checker::assertWrapper($currToken['value']);
+                Checker::assertWrapper($name);
             }
-            if (Checker::isWrapper($name)) {
-                $this->wrapperTrigger = null;
-                NameDotFuncChain::popToken();
-                NameDotFuncChain::init();
-                $this->insertWrapper();
-                return ')->'.$name;
-            }
-            $this->wrapperTrigger = null;
-            return ')->'.$currToken['value'];
+            NameDotChain::init();
+            $this->wrapperTrigger = null;                
+            $this->insertWrapper();
+            return ')->'.$name;
         }
         
-        if ($trueFalseNull = NameDotFuncChain::addName($currToken['value'])) {
+        if ($trueFalseNull = NameDotChain::addName($name)) {
             return $trueFalseNull;
         }
         if (!Checker::isNextDot()) {
-            return NameDotFuncChain::parse($this);
+            return NameDotChain::parse($this);
         }
     }
 }
@@ -918,7 +916,7 @@ class Checker {
     public static function isFunc() {
         return preg_match('/^\s*\(/', Scripter::$userCode);
     }
-    public static function isWrapper($method) {    // $method has already been conirmed as func name.
+    public static function isDefinedWrapper($method) {    // $method has already been conirmed as func name.
         return in_array(strtolower($method), Scripter::wrapperMethods());
     }
     public static function assertFunc($name) {
@@ -928,7 +926,7 @@ class Checker {
     }
     public static function assertWrapper($name) {
         self::assertFunc($name);
-        if (!self::isWrapper($name)) {
+        if (!self::isDefinedWrapper($name)) {
             throw new FatalError("[041] Wrapper method `{$name}()` is not defined in class `".Scripter::$wrapper."`.");
         }
     }
@@ -937,7 +935,7 @@ class Checker {
     }
 }
 
-class NameDotFuncChain {
+class NameDotChain {
     private static $tokens;
     private static $names;
     private static $expression;
@@ -946,19 +944,6 @@ class NameDotFuncChain {
         self::$tokens = [];
         self::$names = [];
         self::$expression = null;
-    }
-
-    /*public static function confirmWrapper($name, $onlyWrapper) {
-        if (!self::isFunc()) {
-            throw new SyntaxError("[007] unexpected {$name}");
-        }
-        if ($onlyWrapper and !self::isWrapper($name)) {
-            throw new SyntaxError("[041] Wrapper method `{$name}()` is not defined in class `".Scripter::$wrapper."`.");
-        }
-    }*/
-    public static function popToken() {
-        array_pop(self::$tokens);
-        array_pop(self::$names);
     }
 
     public static function addDot($token) {
@@ -1027,12 +1012,12 @@ class NameDotFuncChain {
         return '$this->'.$method;     // this.method()
     }
 
-    public static function wrapIfNeeded($script, $method, $onlyWrapper = false) {
-        if (Checker::isWrapper($method)) {
+    public static function wrapIfNeeded($script, $method, $mustBeWrapper = false) {
+        if (Checker::isDefinedWrapper($method)) {
             self::$expression->insertWrapper();
             return $script . ')->' . $method;
         }
-        if ($onlyWrapper) {
+        if ($mustBeWrapper) {
             throw new FatalError("[023] Wrapper method `{$method}()` is not defined in class `".Scripter::$wrapper."`.");
         }
         return $script . '->' . $method;
@@ -1046,7 +1031,7 @@ class LoopMember {
         $loopDepth = strlen($tokens[0]);
 
         if ($loopDepth > Statement::loopDepth()) {
-            throw new SyntaxError('[027] Loop‐member depth is invalid: `'.implode('', $tokens).'`');
+            throw new SyntaxError('[027] Loop-member depth is invalid: `'.implode('', $tokens).'`');
         }
 
         if (in_array($names[0], ['i', 's', 'k'])) {
@@ -1098,21 +1083,15 @@ class LoopMember {
         $script = Statement::loopName($loopDepth, 'v');
         $method = Checker::isFunc() ? array_pop($names) : null;
 
+
         if (!empty($names)) {
-            $path = self::exportChain($names);
-            $script = "self::runChain({$script}, {$path})";
+            $pathCode = "['" . implode("','", $names) . "']";
+            $script = "Tplus::runChain({$script}, {$pathCode})";
         }
 
         return $method
-            ? NameDotFuncChain::wrapIfNeeded($script, $method)
+            ? NameDotChain::wrapIfNeeded($script, $method)
             : $script;
-    }
-
-    public static function exportChain($names) {
-        $parts = array_map(function($n) {
-            return is_array($n) ? "['{$n[0]}',true]" : "'{$n}'";
-        }, $names);
-        return "[" . implode(",", $parts) . "]";
     }
 }
 
@@ -1129,7 +1108,7 @@ class AutoGlobals {
                 : '$_'.$global;
     
             return $method
-                ? NameDotFuncChain::wrapIfNeeded($script, $method, true)
+                ? NameDotChain::wrapIfNeeded($script, $method, true)
                 : $script;
         }
 
@@ -1151,11 +1130,11 @@ class AutoGlobals {
         $script .= "['{$firstKey}']";
 
         if (!empty($names)) {
-            $arg = LoopMember::exportChain($names);
-            $script = "self::runChain({$script}, {$arg})";
+            $pathCode = "['" . implode("','", $names) . "']";
+            $script = "Tplus::runChain({$script}, {$pathCode})";
         }
         return $method
-            ? NameDotFuncChain::wrapIfNeeded($script, $method, true)
+            ? NameDotChain::wrapIfNeeded($script, $method, true)
             : $script;
     }
 
@@ -1167,17 +1146,17 @@ class AutoGlobals {
             $script .= "['{$name}']";
         }
         return $method
-            ? NameDotFuncChain::wrapIfNeeded($script, $method, true)
+            ? NameDotChain::wrapIfNeeded($script, $method, true)
             : $script;
     }
 
     private static function parseServer($names, $method) {
         if (count($names) !== 1) {
-            throw new SyntaxError("[055] `SERVER` allow only onekey. Unexpected token: `{$names[1]}`");
+            throw new SyntaxError("[055] `SERVER` allow only one key. Unexpected token: `{$names[1]}`");
         }
         $script = '$_SERVER["'.$names[0].'"]';
         return $method
-            ? NameDotFuncChain::wrapIfNeeded($script, $method, true)
+            ? NameDotChain::wrapIfNeeded($script, $method, true)
             : $script;
     }
 
@@ -1254,8 +1233,8 @@ class DefaultChain {
             $script = "\$V['{$names[0]}']";
         } else {
             $firstKey = array_shift($names);
-            $arg = LoopMember::exportChain($names);
-            $script = "self::runChain(\$V['{$firstKey}'], {$arg})";
+            $pathCode = "['" . implode("','", $names) . "']";
+            $script = "Tplus::runChain(\$V['{$firstKey}'], {$pathCode})";
         }
         return ['type'=>'dynamic', 'script'=>$script, 'method'=>$method];
 
@@ -1270,12 +1249,12 @@ class DefaultChain {
 
             case 'const':
                 return $info['method']
-                    ? NameDotFuncChain::wrapIfNeeded($info['script'], $info['method'], true)
+                    ? NameDotChain::wrapIfNeeded($info['script'], $info['method'], true)
                     : $info['script'];
 
             case 'dynamic':
                 return $info['method']
-                    ? NameDotFuncChain::wrapIfNeeded($info['script'], $info['method'])
+                    ? NameDotChain::wrapIfNeeded($info['script'], $info['method'])
                     : $info['script'];
 
             default:

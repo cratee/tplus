@@ -31,27 +31,7 @@ class Tplus {
     }
 
     public function get($path) {
-        $htmlPath   = $this->config['HtmlRoot'].$path;
-        $scriptPath = $this->config['HtmlScriptRoot'].$path.'.php';
-        
-
-        if ($this->config['ScriptCheck']) {
-            if (!is_file($htmlPath)) {
-                trigger_error(
-                    "Tpl config `'ScriptCheck' => true` but Tplus cannot find HTML file: `{$htmlPath}`",
-                    E_USER_ERROR
-                );
-                return '';
-            }
-            if ($this->needsScripting($htmlPath, $scriptPath)) {
-                $this->script($htmlPath, $scriptPath);
-            }
-
-        } else if (!is_file($scriptPath)) {
-            trigger_error(
-                "Tpl config `'ScriptCheck' => false` but Tplus cannot find Script file: `{$scriptPath}`",
-                E_USER_ERROR
-            );
+        if (!$scriptPath = $this->getScriptPath($path)) {
             return '';
         }
 
@@ -64,7 +44,7 @@ class Tplus {
         self::$renderDepth++;
 
         if ($start_tpl) {
-            $this->stopAssignCheck();
+            $this->modifyErrorReporting();
             $this->setErrorHandler();         
         }
 
@@ -80,7 +60,7 @@ class Tplus {
 
             if ($start_tpl) {
                 $this->unsetErrorHandler();
-                $this->startAssignCheck();
+                $this->restoreErrorReporting();
             }
 
             self::$renderDepth--;
@@ -99,6 +79,32 @@ class Tplus {
         return $this->get($path);
     }
 
+    private function getScriptPath($path) {
+        $htmlPath   = $this->config['HtmlRoot'].$path;
+        $scriptPath = $this->config['HtmlScriptRoot'].$path.'.php';
+
+        if ($this->config['ScriptCheck']) {
+            if (!is_file($htmlPath)) {
+                trigger_error(
+                    "Tpl config `'ScriptCheck' => true` but Tplus cannot find HTML file: `{$htmlPath}`",
+                    E_USER_ERROR
+                );
+                return false;
+            }
+            if ($this->needsScripting($htmlPath, $scriptPath)) {
+                $this->script($htmlPath, $scriptPath);
+            }
+
+        } else if (!is_file($scriptPath)) {
+            trigger_error(
+                "Tpl config `'ScriptCheck' => false` but Tplus cannot find Script file: `{$scriptPath}`",
+                E_USER_ERROR
+            );
+            return false;
+        }
+
+        return $scriptPath;
+    }
     
     private function script($htmlPath, $scriptPath) {
         require_once __DIR__.'/TplusScripter.php';
@@ -154,16 +160,16 @@ class Tplus {
         restore_error_handler();
     }
 
-    private function stopAssignCheck() {
-        if ($this->_checkAssign()) {
+    private function modifyErrorReporting() {
+        if (!$this->_changeErrorReporting()) {
             return;
         }
         $this->phpReport = error_reporting();
         $AssignErrorBit = $this->_getAssignErrorBit();
         error_reporting($this->phpReport & ~$AssignErrorBit);
     }
-    private function startAssignCheck() {
-        if ($this->_checkAssign()) {
+    private function restoreErrorReporting() {
+        if (!$this->_changeErrorReporting()) {
             return;
         }
         error_reporting($this->phpReport);
@@ -171,16 +177,17 @@ class Tplus {
     private function _getAssignErrorBit() {
         return version_compare(phpversion(), '8.0.0', '<') ? E_NOTICE : E_WARNING;
     }
-    private function _checkAssign() {
-        return !isset($this->config['AssignCheck']) or $this->config['AssignCheck']==true;
+    private function _changeErrorReporting() {
+        return isset($this->config['AssignCheck']) and $this->config['AssignCheck']==false;
     }
 
     /**
-     * run Data Chain (Array or Object)
-     * Rename from runAO to runChain for v1.2.0 compatibility
+     * run Data Chain
      */
     private static function runChain($var, $chain) {
-        if (empty($chain)) return $var;
+        if (empty($chain)) {
+            return $var;
+        }
         end($chain);
         $lastIndex = key($chain);
         foreach ($chain as $i => $name) {
@@ -200,6 +207,11 @@ class Tplus {
             } else if (is_null($var)) {
                 trigger_error("Tplus Runtime: Cannot access key `{$name}` on a null value.");
                 return null;
+            } else {
+                if ($i !== $lastIndex) {
+                    trigger_error("Tplus Runtime: Cannot access key `{$name}` on `{$var}`");
+                    return null;
+                }
             }
         }
         return $var;
