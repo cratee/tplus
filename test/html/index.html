@@ -1,53 +1,261 @@
 <html>
 <head>
-    <title>welcome!</title>
-	<style>
-		td {border-top:1px solid gray}
-	</style>
+<title>welcome!</title>
+
+<style>
+	table { width:100%; background:#e4e6ec; border-spacing:3px; border-collapse:separate; border-radius: 5px; margin:10px 3px }
+	th {font:bold 16px consolas, monospace /*tahoma, verdana, sans-serif*/; padding:3px; color:#555}
+	td { border-radius:3px; font:normal 15px tahoma, verdana, sans-serif; border:0px ; padding:5px 2px ; line-height:22px}
+	td ul {margin:0px; padding:20px;}
+
+	tr td:nth-child(1) { text-align:right;padding-right:5px}
+	tr td:nth-child(2) { white-space: pre-wrap;}
+	tr td:nth-child(n+2):nth-child(-n+4) { background:#f2f3f7; padding:3px 10px; width: 30%;}
+
+	tr td:nth-child(1) span {
+		font: normal 12px consolas, monospace;
+		background: #49c; /* E_WARNING에 쓰인 그 매력적인 블루 */
+		color: #def;
+		padding: 3px 6px;
+		width:45px;
+		text-align: left;
+		border-radius: 3px;
+		display: inline-block;
+	}
+	tr td:nth-child(1) span.ok-badge {
+		font: bold 11px consolas, monospace;
+		background: #2ea44f; /* 깃허브 오픈소스 Pass 감성의 정갈한 초록색 */
+		color: #fff;
+		padding: 3px 5px;
+		border-radius: 3px;
+		margin-left: 6px;
+		width:10px;
+		display: inline-block;
+		vertical-align: middle;
+	}
+
+	.summary-box {
+		font: bold 16px consolas, monospace;
+		background: #e2e5e9; /* 메인 테이블 베이스와 싱크로율 100% */
+		color: #4a5056;
+		padding: 10px 20px;
+		border-radius: 6px;
+		margin: 10px 3px;
+		display: inline-block; /* 딱 글자 크기만큼만 정갈하게 박스 잡기 */
+		box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+	}
+
+	/* 성공/실패 카운트 숫자에만 매력적인 컬러 포인트 주기 */
+	.txt-success { color: #2ea44f; }
+	.txt-fail { color: #cf222e; }
+
+	.src-compile {
+		font: bold 13px consolas, monospace;
+		
+		/*background: #fff8e1;
+		color: #b78103;
+		border: 1px solid #ffe082;*/
+		
+		background:#fca;color:#e33; 
+		border: 1px solid #e33;
+		padding: 1px 6px;
+		border-radius: 3px;
+		margin-left: 15px;
+		display: inline-block;
+	}
+
+	/* 캐시 상태: 딥한 퍼플/블루 톤 */
+	.src-cache {
+		font: bold 13px consolas, monospace;
+		/*background: #f1f0fe;
+		color: #5544d6;
+		border: 1px solid #d1cffd;*/
+
+		background: #def;
+		color:  #49c;
+		border: 1px solid #49c;
+
+		padding: 1px 6px;
+		border-radius: 3px;
+		margin-left: 15px;
+		display: inline-block;
+	}
+ 
+</style>
+<script>
+var compileOrCache = "[= this.isScripted() ? 'compile' : 'cache' ]";
+document.addEventListener("DOMContentLoaded", function() {
+    // 고유 ID를 가진 테스트 테이블 내부의 모든 행(tr)만 정밀 타겟팅합니다.
+    const testTable = document.getElementById("test-table");
+    if (!testTable) return; // 테이블이 없으면 중단
+
+    const rows = testTable.querySelectorAll("tr");
+    
+    let totalCases = 0;
+    let successCases = 0;
+ 
+    rows.forEach(row => {
+        // th(헤더)가 포함된 행은 카운트에서 제외합니다.
+        if (row.querySelector("th")) return;
+
+        const cells = row.querySelectorAll("td");
+        // td 개수가 최소 4개 이상인 정상 데이터 행만 필터링
+        if (cells.length >= 4) {
+            totalCases++; 
+            
+            const noCell = cells[0];
+            const execCell = cells[2];
+            const targetCell = cells[3];
+
+            const execText = execCell.innerText.trim();
+            const targetText = targetCell.innerText.trim();
+
+            // 두 영역의 텍스트가 일치하는지 비교
+            if (execText === targetText && execText !== "") {
+                successCases++;
+                
+                // 기존에 이미 OK 뱃지가 붙어있는지 확인 후, 없을 때만 추가 (중복 방지)
+                if (!noCell.querySelector(".ok-badge")) {
+                    const badge = noCell.querySelector("span");
+                    if (badge) {
+                        const okSpan = document.createElement("span");
+                        okSpan.className = "ok-badge";
+                        okSpan.innerText = "OK";
+                        badge.parentNode.insertBefore(okSpan, badge.nextSibling);
+                    }
+                }
+            }
+        }
+    });
+
+    // 최종 카운트 연산
+    const failCases = totalCases - successCases;
+    
+    // DOM이 확실히 존재할 때만 안전하게 innerText 주입
+    const totalEl = document.getElementById("total-count");
+    const successEl = document.getElementById("success-count");
+    const failEl = document.getElementById("fail-count");
+
+    if (totalEl) totalEl.innerText = totalCases;
+    if (successEl) successEl.innerText = successCases;
+    if (failEl) {
+        failEl.innerText = failCases;
+        // Fail이 0개면 빨간색 대신 차분한 회색조로 변경해서 평온함 유지
+        if (failCases === 0) {
+            failEl.style.color = "#888";
+        } else {
+            failEl.style.color = "#cf222e"; // 실패가 있으면 다시 경고용 레드
+        }
+    }
+
+	const summaryBox = document.querySelector(".summary-box");
+	if (summaryBox) {
+		const srcSpan = document.createElement("span");
+		const benchMarker = document.getElementById("tpl-bench-marker");
+		const elapsedMs = benchMarker ? ' : '+benchMarker.getAttribute("data-time")+" ms" : '';
+		if (compileOrCache === "cache") {
+			srcSpan.className = "src-cache";
+			srcSpan.innerText = "CACHE HIT"+ elapsedMs;
+		} else {
+			srcSpan.className = "src-compile";
+			srcSpan.innerText = "LIVE COMPILE"+ elapsedMs;
+		}
+		
+		// 통계판 배너 맨 뒤에 상태 뱃지 툭 붙이기
+		summaryBox.appendChild(srcSpan);
+	
+	}
+});
+</script>
 </head>
 <body>
 
-	
-<table>
+<div class="summary-box">
+    Total: <span id="total-count">0</span> , 
+    Success: <span id="success-count" class="txt-success">0</span> , 
+    Fail: <span id="fail-count" class="txt-fail">0</span>
+</div>
+
+<table id="test-table">
 
 <tr>
 	<th>
-		문서 항목 번호
+		No.
 	</th>
 	<th>
-		실행 결과
+		Code
 	</th>
 	<th>
-		결과 코드
+		Execution
+	</th>
+	<th>
+		Target
 	</th>
 </tr>
 <tr>
-	<td>7.</td>
-	<td><!-- [=foo]--> [=bar()]</td>
-	<td>hello~ good good</td>
-</tr>
-<tr>
-	<td>9.1</td>
+	<td><span>7.</span></td>
 	<td>
-	[@ range(1,2)]
-		[@ range(3,5)]
-			   [=.v] x [=..v] = [=.v *..v] <br/>
-		[/]
+&lt;-- [\=foo] --&gt; &lt;br/&gt;
+[\=bar()]
+	</td>
+	<td>
+	<!-- [=foo] --> <br/>
+ 	[=bar()]
+	</td>
+	<td>
+	hello~ <br/> 
+	good good
+	</td>
+</tr>
+<tr>
+	<td><span>9.1.</span></td>
+	<td>
+[\@ range(1,2)]
+	[\@ range(3,5)]
+		[\=.v] x [\=..v] = [\=.v *..v]&lt;br/&gt;
+	[\/]
+[\/]
+	</td>
+	<td>
+[@ range(1,2)]
+	[@ range(3,5)]
+			[=.v] x [=..v] = [=.v *..v] <br/>
 	[/]
+[/]
 	</td>
 	
 	<td>
-		1 x 3 = 3 <br/>
-		1 x 4 = 4 <br/>
-		1 x 5 = 5 <br/>
-					2 x 3 = 6 <br/>
-		2 x 4 = 8 <br/>
-		2 x 5 = 10 <br/>
+1 x 3 = 3 <br/>
+1 x 4 = 4 <br/>
+1 x 5 = 5 <br/>
+			2 x 3 = 6 <br/>
+2 x 4 = 8 <br/>
+2 x 5 = 10 <br/>
 	</td>
 </tr>
 
 <tr>
-	<td>9.2.1.</td>
+	<td><span>9.2.1.</span></td>
+
+	<td>
+&lt;ul&gt;
+[\@ country]
+	&lt;li&gt;
+	[\=.name] [\=.pop] million
+	&lt;ul&gt;
+	[\@ .city]
+		&lt;li&gt;
+		[\=..name] [\=..pop] million
+		([\= ..pop / .pop * 100]%)
+		&lt;/li&gt;
+	[\/]
+	&lt;/ul&gt;
+	&lt;/li&gt;
+[\/]
+&lt;/ul&gt;
+			
+	</td>
+	
 	<td>
 		<ul>
 			[@ country]
@@ -90,8 +298,16 @@
 		</ul>
 	</td>
 </tr>
+
 <tr>
-	<td>9.2.2.</td>
+	<td><span>9.2.2.</span></td>
+	<td>
+[\@ foo1]
+	[\@ bar1]		
+		[\=.v] x [\=..v] = [\=.v *..v] &lt;br/&gt;
+	[\/]
+[\/]
+	</td>
 	<td>
 	[@ foo1]
 		[@ bar1]		
@@ -114,8 +330,15 @@
 		2 x 5 = 10 <br/>
 	</td>
 </tr>
+
 <tr>
-	<td>10.1.</td>
+	<td><span>10.1.</span></td>
+	<td>
+[\@ {'a':'apple', 'b':'banana', 'c':'cherry'}]
+	[\=.i+1]/[\=.s]. [\=.k]: [\=.v] &lt;br/&gt;
+[\/]
+	</td>
+
 	<td>
 	[@ {'a':'apple', 'b':'banana', 'c':'cherry'}]
 		[=.i+1]/[=.s]. [=.k]: [=.v] <br/>
@@ -129,7 +352,13 @@
 </tr>
 
 <tr>
-	<td>10.2.1.</td>
+	<td><span>10.2.1.</span></td>
+	<td>
+[\@ ['apple', 'banana', 123:'cherry']]
+	[\=.s - .i]. [\=.k]: [\=.v] &lt;br/&gt;
+[\/]
+	</td>
+
 	<td>
 	[@ ['apple', 'banana', 123:'cherry']]
 		[=.s - .i]. [=.k]: [=.v] <br/>
@@ -141,8 +370,17 @@
 		1. 123: cherry <br/>
 	</td>
 </tr>
+
 <tr>
-	<td>10.2.2.</td>
+	<td><span>10.2.2.</span></td>
+	<td>
+[\@ {1, 2}]
+	[\@ {3, 4, 5}]
+		[\=.v] x [\=..v] = [\=.v *..v] &lt;br/&gt;
+	[\/]
+[\/]
+	</td>
+
 	<td>
 	[@ {1, 2}]
 		[@ {3, 4, 5}]
@@ -160,8 +398,13 @@
 		2 x 5 = 10 <br/>
 	</td>
 </tr>
+
 <tr>
-	<td>11.</td>
+	<td><span>11.</span></td>
+	<td>
+[\=fooo[3]] [\=fooo{3}]
+	</td>
+
 	<td>
 		[=fooo[3]] [=fooo{3}]
 	</td>
@@ -169,8 +412,14 @@
 		4 4	
 	</td>
 </tr>
+
 <tr>
-	<td>12.1.</td>
+	<td><span>12.1.</span></td>
+	<td>
+[\=xx.bar()]&lt;br/&gt;
+[\=yy.baz]
+	</td>
+
 	<td>
 	[=xx.bar()]<br>
 	[=yy.baz]
@@ -181,7 +430,10 @@
 	</td>
 </tr>
 <tr>
-	<td>12.2.</td>
+	<td><span>12.2.</span></td>
+	<td>
+[\=zz.baz().bar()]
+	</td>
 	<td>
 	[=zz.baz().bar()]
 	</td>
@@ -190,14 +442,16 @@
 	</td>
 </tr>
 <tr>
-	<td>12.3.</td>
+	<td><span>12.3.</span></td>
 	<td>
-	
+[\@ product]
+	[\=.code()] [\=.name()] [\=.v.price()]&lt;br/&gt;
+[\/]
+	</td>
+	<td>
 	[@ product]
 		[=.code()] [=.name()] [=.v.price()]<br/>
 	[/]
-
-		
 	</td>
 	<td>
 	001 vitamin $100.00<br/>
@@ -205,7 +459,10 @@
 	</td>
 </tr>
 <tr>
-	<td>13.1.1.</td>
+	<td><span>13.1.1.</span></td>
+	<td>
+[\=MY_CONST] 
+	</td>
 	<td>
 		[=MY_CONST] 
 	</td>
@@ -214,18 +471,26 @@
 	</td>
 </tr>
 <tr>
-	<td>13.1.2.</td>
+	<td><span>13.1.2.</span></td>
+	<td>
+[\@ MY_CONST_ARRAY][\=.k]:[\=.v]&lt;br/&gt;[\/]
+	</td>
 	<td>
 	[@ MY_CONST_ARRAY][=.k]:[=.v]<br/>[/]
 	</td>
 	<td>
-	
 	a:1<br/>b:2<br/>c:3<br/>	
-
 	</td>
 </tr>
 <tr>
-	<td>13.2.</td>
+	<td><span>13.2.</span></td>
+	<td>
+[\=Foo.bar()]&lt;br/&gt;
+[\=Foo.ITEMS_PER_PAGE]&lt;br/&gt;
+[\=Bar.baz.bar()]&lt;br/&gt;
+[\=Bar.baz.ITEMS_PER_PAGE]&lt;br/&gt;
+	</td>
+
 	<td>
 	[=Foo.bar()]<br/>
 	[=Foo.ITEMS_PER_PAGE]<br/>
@@ -241,7 +506,11 @@
 </tr>
 
 <tr>
-	<td>13.3.</td>
+	<td><span>13.3.</span></td>
+	<td>
+[\= Widget.Calender.draw()]&lt;br/&gt;
+[\= Widget.Calender.MONTH.march]&lt;br/&gt;
+	</td>
 	<td>
 	[= Widget.Calender.draw()]<br/>
 	[= Widget.Calender.MONTH.march]<br/>
@@ -253,9 +522,12 @@
 </tr>
 
 <tr>
-	<td>14.1.1.</td>
+	<td><span>14.1.1.</span></td>
 	<td>
-	[\=this.get('sub.html')]
+[\=this.get('sub.html')]
+	</td>
+	<td>
+	[=this.get('sub.html')]
 	</td>
 	<td>
 	<div>4 4</div>	
@@ -263,19 +535,23 @@
 	</td>
 </tr>
 <tr>
-	<td>14.1.2.</td>
+	<td><span>14.1.2.</span></td>
+	<td>
+[\=Tpl.get( 'sub.html', {'fooo':{3,4,5,6,7,8}} )]
+	</td>
 	<td>
 	[=Tpl.get( 'sub.html', {'fooo':{3,4,5,6,7,8}} )]
-
 	</td>
 	<td>
 	<div>6 6</div>
 	</td>
 </tr>
 <tr>
-	<td>14.2.1</td>
+	<td><span>14.2.1.</span></td>
 	<td>
-
+[\=this.fetch(sub)]
+	</td>
+	<td>
 	[=this.fetch(sub)]
 	</td>
 	<td>
@@ -283,7 +559,11 @@
 	</td>
 </tr>
 <tr>
-	<td>14.2.2</td>
+	<td><span>14.2.2.</span></td>
+	<td>
+[\=sub2]
+	</td>
+
 	<td>
 	[=sub2]
 	</td>
@@ -294,7 +574,16 @@
 
 
 <tr>
-	<td>15.</td>
+	<td><span>15.</span></td>
+	<td>
+[\?foo2][\=bar2][\:]baz[\/]&lt;br/&gt;
+[\= foo2 ? bar3 : "baz"]&lt;br/&gt;
+[\= foo ?: "bar"]&lt;br/&gt;
+[\= foo3 ?? "bar"]&lt;br/&gt;
+[\= foo3 ?: bar() ?: "baz"]&lt;br/&gt;
+[\= foo ? (bar ? 'foobar' : 'foo') : 'no']
+	</td>
+
 	<td>
 	[?foo2][=bar2][:]baz[/]<br/>
 	[= foo2 ? bar3 : "baz"]<br/>
@@ -328,7 +617,14 @@
 *]
 
 <tr>
-	<td>17. </td>
+	<td><span>17.</span></td>
+	<td>
+[\=this.assign({'foo':123})]					
+[\=this.assign({'foo':456,'bar':'bbb'})]	
+
+[\=foo] [\=bar]	
+	</td>
+
 	<td>
 		[=this.assign({'foo':123})]					
 		[=this.assign({'foo':456,'bar':'bbb'})]	
@@ -342,9 +638,11 @@
 </tr>
 
 <tr>
-	<td>19.</td>
+	<td><span>19.</span></td>
 	<td>
-
+[\=ucfirst( bar + "baz" + caz )]
+	</td>
+	<td>
 		[=ucfirst( bar + "baz" + caz )]
 	</td>
 	<td>
@@ -354,13 +652,29 @@
 </tr>
 
 <tr>
-	<td>20</td>
+	<td><span>20.</span></td>
 	<td>
-	[@ {}]
-		[=.v]
-	[:]
-		foo empty
-	[/]
+[\@ {}]
+	[\=.v]
+[\:]
+	foo empty
+[\/]&lt;br/&gt;	
+
+[\? fruit == 'apple' || fruit == 'cherry']
+	red
+[\: fruit == 'blueberry' || pants=='jeans']
+	blue
+[\:]
+	unkown
+[\/]
+	</td>
+
+	<td>
+[@ {}]
+	[=.v]
+[:]
+	foo empty
+[/]
 <br/>
 [? fruit == 'apple' || fruit == 'cherry']
 	red
@@ -377,19 +691,24 @@
 		blue
 	</td>
 </tr>
+
 <tr>
-	<td>21.</td>
-	
-	
-	
+	<td><span>21.</span></td>
 	<td>
-		[= "abcde".toUpper() ]
+[\= "abcde".toUpper() ] &lt;br/&gt;
+[\= {2,5,8}.average() ] &lt;br/&gt;
+[\= "abcde".toUpper().substr(1,3)] &lt;br/&gt;
+[\= article.esc().nl2br()] &lt;br/&gt;
+[\@ product]
+	[\=.code()] [\=.name().substr(0,3).ucfirst()] [\=.price()] &lt;br/&gt;
+[\/]
+	</td>
 
-	[= {2,5,8}.average() ] <br/>
-
-	[= "abcde".toUpper().substr(1,3)] <br/>
-
-	[= article.esc().nl2br()] <br/>
+	<td>
+[= "abcde".toUpper() ] <br/>
+[= {2,5,8}.average() ] <br/>
+[= "abcde".toUpper().substr(1,3)] <br/>
+[= article.esc().nl2br()] <br/>
 
 [@ product]
 	[=.code()] [=.name().substr(0,3).ucfirst()] [=.price()]<br/>
@@ -398,27 +717,29 @@
 
 	</td>
 	<td>
-		ABCDE
+	ABCDE <br/>
 	5 <br/>
-
 	BCD <br/>
-
 	a &lt; b <br />
- b &gt; c <br/>
+	b &gt; c <br/>
 
 	001 Vit $100.00<br/>
 	002 Sho $123.00<br/>
 	</td>
 </tr>
 <tr>
-	<td>22.</td>
-	
+	<td><span>22.</span></td>
+	<td>
+[\@ {'apple', 'banana', 'cherry'}]
+	[\=.i]: [\=.v]:
+	[\=.h.isEven() ? "even" : "odd"] [\?.h.isLast()]--Last[\/]&lt;br/&gt;
+[\/]
+	</td>
 	<td>
 	[@ {'apple', 'banana', 'cherry'}]
 		[=.i]: [=.v]:
 		[=.h.isEven() ? "even" : "odd"] [?.h.isLast()]--Last[/]<br/>
 	[/]
-
 	</td>
 	<td>
 		0: apple:
@@ -469,5 +790,5 @@
 </br>
 
 
-</body>
-</html>
+<!-- /body>
+</html -->

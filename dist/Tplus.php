@@ -8,6 +8,7 @@ class Tplus {
     private $config;
     private $data=[];
     private $phpReport;
+    private $scripted = false;
     private static $renderDepth=0;
     private static $isShutdownRegistered = false;
 
@@ -78,7 +79,9 @@ class Tplus {
     public function fetch($path) {
         return $this->get($path);
     }
-
+    public function isScripted() {
+        return $this->scripted;
+    }
     private function getScriptPath($path) {
         $htmlPath   = $this->config['HtmlRoot'].$path;
         $scriptPath = $this->config['HtmlScriptRoot'].$path.'.php';
@@ -115,6 +118,8 @@ class Tplus {
             $this->scriptHeader($htmlPath), 
             $this->config
         );
+
+        $this->scripted = true;
     }
 
     private function needsScripting($htmlPath, $scriptPath) {

@@ -888,9 +888,10 @@ class Expression {
 
     private function parseName($prevToken, $currToken) { 
     // Name: variable | function | array | key | object | prop | method | namespace | class | keyword
+
+        $name = $currToken['value'];
         if ($this->wrapperTrigger) {
             // .name after ParenthesisClose | BraceClose | BracketClose | Number | Quoted 
-            $name = $currToken['value'];
             if ($this->wrapperTrigger === 'ParenthesisClose') {
                 Checker::assertFunc($name);                                                                          //// ????
             } else {

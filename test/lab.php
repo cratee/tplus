@@ -1,4 +1,8 @@
 <?php  
+phpinfo();
+exit;
+
+
 include '../dist/Tpl-dist.php';
 
 echo \Tpl::get('lab.html', []);

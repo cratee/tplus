@@ -119,7 +119,10 @@ $vals = [
 	'article' => "a < b \n b > c",
 ];
 
-
+$totalStart = microtime(true);
 echo Tpl::get('index.html', $vals);
+$totalEnd = microtime(true);
+$elapsedMs = round(($totalEnd - $totalStart) * 1000, 2);
 
-echo Tpl::get('subdir/file.html', $vals);
+echo '<div id="tpl-bench-marker" data-time="'.$elapsedMs.'" style="display:none;"></div></body></html>';
+//echo Tpl::get('subdir/file.html', $vals);
