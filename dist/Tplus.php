@@ -79,9 +79,15 @@ class Tplus {
     public function fetch($path) {
         return $this->get($path);
     }
+
+    /**
+     * Returns whether the template has been compiled to a PHP script.
+     * 
+     */
     public function isScripted() {
         return $this->scripted;
     }
+
     private function getScriptPath($path) {
         $htmlPath   = $this->config['HtmlRoot'].$path;
         $scriptPath = $this->config['HtmlScriptRoot'].$path.'.php';
@@ -225,7 +231,7 @@ class Tplus {
 }
 
 
-class TplusWrapper {
+abstract class TplusWrapper {
     
     static protected $instance;
 
@@ -261,16 +267,30 @@ class TplusWrapper {
     }
 
     public function substr($a, $b=null) {
+        if (function_exists('grapheme_substr')) {
+            return is_null($b) ? grapheme_substr($this->x, $a) : grapheme_substr($this->x, $a, $b);
+        }
+        if (function_exists('mb_substr')) {
+            return is_null($b) ? mb_substr($this->x, $a) : mb_substr($this->x, $a, $b);
+        }
         return is_null($b) ? substr($this->x, $a) : substr($this->x, $a, $b);
     }
-
+    public function length() {
+        if (function_exists('grapheme_strlen')) {
+            return grapheme_strlen($this->x);
+        }
+        if (function_exists('mb_strlen')) {
+            return mb_strlen($this->x);
+        }
+        return strlen($this->x);
+    }
     public function concat() {
         return $this->x . implode('',func_get_args());
     }
 }
 
 
-class TplusLoopHelper {
+abstract class TplusLoopHelper {
 
     static protected $instance;
 

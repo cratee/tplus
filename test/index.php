@@ -9,11 +9,11 @@ const MY_CONST_ARRAY= ['a'=>1, 'b'=> 2, 'c'=>3];
 $me = 'I\'m global';
 
 
-$country = [
+$countries = [
 	[
 		'name'=>'South Korea',
 		'pop'=> 50,
-		'city'=>[
+		'cities'=>[
 			[
 				'name'=> 'Seoul',
 				'pop' => 10,
@@ -28,7 +28,7 @@ $country = [
 	[
 		'name'=>'Republic of Maldives',
 		'pop'=> 0.4,
-		'city'=>[
+		'cities'=>[
 			[
 				'name'=> 'Male',
 				'pop' => 0.15,
@@ -91,6 +91,11 @@ $path=[
 	'upload'=>'/upload',
 ];
 
+$user2 = new stdClass();
+$user2->name	= "Kitty";
+$user2->age		= 25;
+$user2->hobbies	= ["first"=>"running", "second"=>"music"];
+
 $vals = [
 	'path' => $path,
 	'var' => $var,
@@ -100,7 +105,7 @@ $vals = [
 	'foo'	=> 'hello~',
 	'bar'	=> 'bbb',
 	'caz'	=> 'zzz',
-	'country' => $country,
+	'countries' => $countries,
 	'foo1'	=>[1, 2],
 	'bar1'	=>[3, 4, 5],
 	'foo2'	=>true,
@@ -108,6 +113,8 @@ $vals = [
 	'bar2'	=>'Tplus if',
 	'bar3'	=>'ternary operator',
 	'fooo'	=>[1,2,3,4,5],
+	'user'	=>["name"=>"Cratee", "age"=>56, "hobbies"=>["first"=>"Piano", "second"=>"running"]],
+	'user2'	=>$user2,
 	'xx'=> new xxx(),
 	'yy'=> ['baz'=>'from array'],
 	'zz'=> new zzz(),

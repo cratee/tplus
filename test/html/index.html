@@ -23,58 +23,59 @@
 		display: inline-block;
 	}
 	tr td:nth-child(1) span.ok-badge {
-		font: bold 11px consolas, monospace;
-		background: #2ea44f; /* 깃허브 오픈소스 Pass 감성의 정갈한 초록색 */
-		color: #fff;
-		padding: 3px 5px;
+		font: bold 12px consolas, monospace;
+		background: #2a4;
+		color: #ced;
+		padding: 3px 3px;
 		border-radius: 3px;
-		margin-left: 6px;
-		width:10px;
+		margin-left: 5px;
+		width:15px;
 		display: inline-block;
 		vertical-align: middle;
+		text-align:center
+	}
+	tr td:nth-child(1) span.fail-badge {
+    	font: bold 12px consolas, monospace;
+		background: #cf222e; /* 실패 빨간색 */
+		color: #fdd;
+		padding: 3px 3px;
+		border-radius: 3px;
+		margin-left: 5px;
+		width: 15px;
+		display: inline-block;
+		vertical-align: middle;
+		text-align: center;
 	}
 
 	.summary-box {
 		font: bold 16px consolas, monospace;
-		background: #e2e5e9; /* 메인 테이블 베이스와 싱크로율 100% */
+		background: #e2e5e9;
 		color: #4a5056;
 		padding: 10px 20px;
 		border-radius: 6px;
 		margin: 10px 3px;
-		display: inline-block; /* 딱 글자 크기만큼만 정갈하게 박스 잡기 */
+		display: inline-block;
 		box-shadow: 0 2px 8px rgba(0,0,0,0.04);
 	}
 
-	/* 성공/실패 카운트 숫자에만 매력적인 컬러 포인트 주기 */
 	.txt-success { color: #2ea44f; }
 	.txt-fail { color: #cf222e; }
 
 	.src-compile {
 		font: bold 13px consolas, monospace;
-		
-		/*background: #fff8e1;
-		color: #b78103;
-		border: 1px solid #ffe082;*/
-		
 		background:#fca;color:#e33; 
-		border: 1px solid #e33;
+		border: 1px solid #eb9;
 		padding: 1px 6px;
 		border-radius: 3px;
 		margin-left: 15px;
 		display: inline-block;
 	}
 
-	/* 캐시 상태: 딥한 퍼플/블루 톤 */
 	.src-cache {
 		font: bold 13px consolas, monospace;
-		/*background: #f1f0fe;
-		color: #5544d6;
-		border: 1px solid #d1cffd;*/
-
 		background: #def;
 		color:  #49c;
-		border: 1px solid #49c;
-
+		border: 1px solid #8cf;
 		padding: 1px 6px;
 		border-radius: 3px;
 		margin-left: 15px;
@@ -83,11 +84,10 @@
  
 </style>
 <script>
-var compileOrCache = "[= this.isScripted() ? 'compile' : 'cache' ]";
+const compileOrCache = "[= this.isScripted() ? 'compile' : 'cache' ]";
 document.addEventListener("DOMContentLoaded", function() {
-    // 고유 ID를 가진 테스트 테이블 내부의 모든 행(tr)만 정밀 타겟팅합니다.
     const testTable = document.getElementById("test-table");
-    if (!testTable) return; // 테이블이 없으면 중단
+    if (!testTable) return;
 
     const rows = testTable.querySelectorAll("tr");
     
@@ -95,43 +95,43 @@ document.addEventListener("DOMContentLoaded", function() {
     let successCases = 0;
  
     rows.forEach(row => {
-        // th(헤더)가 포함된 행은 카운트에서 제외합니다.
         if (row.querySelector("th")) return;
-
         const cells = row.querySelectorAll("td");
-        // td 개수가 최소 4개 이상인 정상 데이터 행만 필터링
-        if (cells.length >= 4) {
-            totalCases++; 
-            
-            const noCell = cells[0];
-            const execCell = cells[2];
-            const targetCell = cells[3];
+        if (cells.length < 4) return;
+	
+		totalCases++; 
+		
+		const noCell = cells[0];
+		const execCell = cells[2];
+		const targetCell = cells[3];
 
-            const execText = execCell.innerText.trim();
-            const targetText = targetCell.innerText.trim();
+		const execText = execCell.innerText.trim();
+		const targetText = targetCell.innerText.trim();
 
-            // 두 영역의 텍스트가 일치하는지 비교
-            if (execText === targetText && execText !== "") {
-                successCases++;
-                
-                // 기존에 이미 OK 뱃지가 붙어있는지 확인 후, 없을 때만 추가 (중복 방지)
-                if (!noCell.querySelector(".ok-badge")) {
-                    const badge = noCell.querySelector("span");
-                    if (badge) {
-                        const okSpan = document.createElement("span");
-                        okSpan.className = "ok-badge";
-                        okSpan.innerText = "OK";
-                        badge.parentNode.insertBefore(okSpan, badge.nextSibling);
-                    }
-                }
+		const badge = noCell.querySelector("span");
+
+		if (execText === targetText && execText !== "") {
+			successCases++;
+			
+			if (!noCell.querySelector(".ok-badge")) {
+				if (badge) {
+					const okSpan = document.createElement("span");
+					okSpan.className = "ok-badge";
+					okSpan.innerText = "OK";//"✔";
+					badge.parentNode.insertBefore(okSpan, badge.nextSibling);
+				}
             }
-        }
+        } else {
+			if (badge && !noCell.querySelector(".fail-badge")) {
+				const failSpan = document.createElement("span");
+				failSpan.className = "fail-badge";
+				failSpan.innerText = "X"; //"✘";
+				badge.parentNode.insertBefore(failSpan, badge.nextSibling);
+			}
+		}
     });
 
-    // 최종 카운트 연산
     const failCases = totalCases - successCases;
-    
-    // DOM이 확실히 존재할 때만 안전하게 innerText 주입
     const totalEl = document.getElementById("total-count");
     const successEl = document.getElementById("success-count");
     const failEl = document.getElementById("fail-count");
@@ -140,12 +140,7 @@ document.addEventListener("DOMContentLoaded", function() {
     if (successEl) successEl.innerText = successCases;
     if (failEl) {
         failEl.innerText = failCases;
-        // Fail이 0개면 빨간색 대신 차분한 회색조로 변경해서 평온함 유지
-        if (failCases === 0) {
-            failEl.style.color = "#888";
-        } else {
-            failEl.style.color = "#cf222e"; // 실패가 있으면 다시 경고용 레드
-        }
+        failEl.style.color = failCases === 0 ? "#888" : "#cf222e";
     }
 
 	const summaryBox = document.querySelector(".summary-box");
@@ -160,10 +155,7 @@ document.addEventListener("DOMContentLoaded", function() {
 			srcSpan.className = "src-compile";
 			srcSpan.innerText = "LIVE COMPILE"+ elapsedMs;
 		}
-		
-		// 통계판 배너 맨 뒤에 상태 뱃지 툭 붙이기
 		summaryBox.appendChild(srcSpan);
-	
 	}
 });
 </script>
@@ -207,6 +199,7 @@ document.addEventListener("DOMContentLoaded", function() {
 	good good
 	</td>
 </tr>
+
 <tr>
 	<td><span>9.1.</span></td>
 	<td>
@@ -239,11 +232,11 @@ document.addEventListener("DOMContentLoaded", function() {
 
 	<td>
 &lt;ul&gt;
-[\@ country]
+[\@ countries]
 	&lt;li&gt;
 	[\=.name] [\=.pop] million
 	&lt;ul&gt;
-	[\@ .city]
+	[\@ .cities]
 		&lt;li&gt;
 		[\=..name] [\=..pop] million
 		([\= ..pop / .pop * 100]%)
@@ -258,11 +251,11 @@ document.addEventListener("DOMContentLoaded", function() {
 	
 	<td>
 		<ul>
-			[@ country]
+			[@ countries]
 			<li>
 				[=.name] [=.pop] million
 				<ul>
-				[@ .city]
+				[@ .cities]
 				<li>
 					[=..name] [=..pop] million ([= ..pop / .pop * 100]%)
 				</li>
@@ -400,7 +393,7 @@ document.addEventListener("DOMContentLoaded", function() {
 </tr>
 
 <tr>
-	<td><span>11.</span></td>
+	<td><span>11.1.</span></td>
 	<td>
 [\=fooo[3]] [\=fooo{3}]
 	</td>
@@ -413,8 +406,40 @@ document.addEventListener("DOMContentLoaded", function() {
 	</td>
 </tr>
 
+
+<tr>
+	<td><span>11.2.</span></td>
+	<td>
+[\=user.name], [\=user.age], [\=user.hobbies.second]
+	</td>
+
+	<td>
+[=user.name], [=user.age], [=user.hobbies.second]
+	</td>
+	<td>
+Cratee, 56, running
+	</td>
+</tr>
+
 <tr>
 	<td><span>12.1.</span></td>
+	<td>
+[\=user2.name], [\=user2.age], [\=user2.hobbies.first]
+	</td>
+
+	<td>
+[=user2.name], [=user2.age], [=user2.hobbies.first]
+	</td>
+	<td>
+Kitty, 25, running
+	</td>
+</tr>
+
+
+
+
+<tr>
+	<td><span>12.2.</span></td>
 	<td>
 [\=xx.bar()]&lt;br/&gt;
 [\=yy.baz]
@@ -430,7 +455,7 @@ document.addEventListener("DOMContentLoaded", function() {
 	</td>
 </tr>
 <tr>
-	<td><span>12.2.</span></td>
+	<td><span>12.3.</span></td>
 	<td>
 [\=zz.baz().bar()]
 	</td>
@@ -442,7 +467,7 @@ document.addEventListener("DOMContentLoaded", function() {
 	</td>
 </tr>
 <tr>
-	<td><span>12.3.</span></td>
+	<td><span>12.4.</span></td>
 	<td>
 [\@ product]
 	[\=.code()] [\=.name()] [\=.v.price()]&lt;br/&gt;
@@ -696,9 +721,12 @@ document.addEventListener("DOMContentLoaded", function() {
 	<td><span>21.</span></td>
 	<td>
 [\= "abcde".toUpper() ] &lt;br/&gt;
+[\= "abcde".length() ] &lt;br/&gt;
 [\= {2,5,8}.average() ] &lt;br/&gt;
 [\= "abcde".toUpper().substr(1,3)] &lt;br/&gt;
 [\= article.esc().nl2br()] &lt;br/&gt;
+[\= GLOBALS.me.substr(0,5)] &lt;br/&gt;
+
 [\@ product]
 	[\=.code()] [\=.name().substr(0,3).ucfirst()] [\=.price()] &lt;br/&gt;
 [\/]
@@ -706,9 +734,11 @@ document.addEventListener("DOMContentLoaded", function() {
 
 	<td>
 [= "abcde".toUpper() ] <br/>
+[= "abcde".length() ] <br/>
 [= {2,5,8}.average() ] <br/>
 [= "abcde".toUpper().substr(1,3)] <br/>
 [= article.esc().nl2br()] <br/>
+[= GLOBALS.me.substr(0,5)] <br/>
 
 [@ product]
 	[=.code()] [=.name().substr(0,3).ucfirst()] [=.price()]<br/>
@@ -719,10 +749,11 @@ document.addEventListener("DOMContentLoaded", function() {
 	<td>
 	ABCDE <br/>
 	5 <br/>
+	5 <br/>
 	BCD <br/>
 	a &lt; b <br />
 	b &gt; c <br/>
-
+	I'm g <br/>
 	001 Vit $100.00<br/>
 	002 Sho $123.00<br/>
 	</td>
@@ -751,43 +782,6 @@ document.addEventListener("DOMContentLoaded", function() {
 	</td>
 </tr>
 </table>
-
-<br/>
-<br/>
-[\=SERVER.PHP_SELF]: [=SERVER.PHP_SELF]<br/>
-[\=SERVER.PHP_SELF.toUpper()]:  [=SERVER.PHP_SELF.toUpper()] 
-<br/>
-<br/>
-[\=GLOBALS.me]:  [=GLOBALS.me] <br/>
-[\=GLOBALS.me.substr(0,5)]:  [=GLOBALS.me.substr(0,5)] 
-<br/>
-<br/>
-[? isset(GET.keyword)]
-	[=GET.keyword][=GET.keyword.esc()]
-[/]
-<br/>
-[/][:]
-<br/>
-[:CSS][/]
-
-
-[? isset(view)]
-	<p>[=view.seq]</p>
-[:]
-	<p>isset() empty()</p>
-[/]</br>
-
-[= Widget.Calender.MONTH.march.double()]
-
-<br/><br/>
-[= "a < b".esc()] xx
-
-
-
-[="abc"][="def"]
-[="hij"]
-
-</br>
 
 
 <!-- /body>
