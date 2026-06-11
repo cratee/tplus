@@ -36,6 +36,9 @@ class Tpl {
 	}
 
 	protected static $injectedConfig = [];
+	public static function getConfig() {
+		return static::config();
+	}
 	public static function setConfig(array $config) {
 		static::$injectedConfig = array_merge(static::$injectedConfig, $config);
 	}
