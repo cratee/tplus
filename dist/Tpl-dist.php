@@ -4,7 +4,7 @@ require_once __DIR__.'/Tplus.php';
 
 class Tpl {	
 	protected static function config() {
-		return [
+		return array_merge([
 			/**
 			 *  (1/4) template directory 
 			 */
@@ -32,8 +32,17 @@ class Tpl {
 			 * 		This suppreses E_NOTICE (PHP 7.x) or E_WARNING (PHP 8.x).
 			 */
 			'AssignCheck' => true
-		];
+		], static::$injectedConfig);
 	}
+
+	protected static $injectedConfig = [];
+	public static function setConfig(array $config) {
+		static::$injectedConfig = $config;
+	}
+	public static function resetConfig() {
+		static::$injectedConfig = [];
+	}
+
 	public static function get($path, $data=[]) {
 		$tplus = self::_();
 		$tplus->assign($data);
