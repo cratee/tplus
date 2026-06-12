@@ -41,13 +41,14 @@ class Scripter {
     public static $loopHelper;
     public static $userCode;
 
-    public static function script($htmlPath, $scriptPath, $sizePad, $header, $config) {
+    public static function script($path, $htmlPath, $sizePad, $header, $config) {
     
         self::$wrapper = '\\'.(empty($config['Wrapper']) ? 'TplWrapper' : $config['Wrapper']);
         self::$loopHelper = '\\'.(empty($config['LoopHelper']) ? 'TplLoopHelper' : $config['LoopHelper']);
+
         try {
-            self::$userCode = self::getHtml($htmlPath);        
-            self::saveScript($config['HtmlScriptRoot'], $scriptPath, $sizePad, $header, self::parse()); 
+            self::$userCode = self::getHtml($htmlPath);            
+            self::saveScript($path, $sizePad, $header, $config, self::parse()); 
 
         } catch(SyntaxError $e) {
             self::reportError('Tplus Scripter Syntax Error ', $e->getMessage(), $htmlPath, self::$currentLine);
@@ -55,6 +56,39 @@ class Scripter {
         } catch(FatalError $e) {
             self::reportError('Tplus Scripter Fatal Error ',  $e->getMessage(), $htmlPath, self::$currentLine);
         }
+    }
+
+    private static function saveScript($path, $sizePad, $header, $config, $script) {
+        
+        $scriptRoot = rtrim(str_replace('\\', '/', $config['HtmlScriptRoot']), '/');
+        $path       = ltrim(str_replace('\\', '/', $path), '/');
+        $scriptFile = $scriptRoot . '/' . $path . '.php';
+        $targetDir = dirname($scriptFile);
+
+        if (!is_dir($targetDir)) {
+            if (!mkdir($targetDir, 0775, true)) {
+                throw new FatalError('[036] Cannot create directory ' . $targetDir . '. Check write-permission.');
+            }
+        }
+        if (!is_readable($targetDir)) {
+            throw new FatalError('[052] Script root is not readable. Check web-server read-permission for: '.$targetDir);
+        }
+        if (DIRECTORY_SEPARATOR === '/' and !is_writable($targetDir)) {
+            //@note is_writable() might not work on some OS(old version Windows?).
+            throw new FatalError('[053] Script root is not writable. Check web-server write-permission: '.$targetDir);
+        }
+
+        $headerPostfix = ' */ ?>' . "\n";
+        $headerSize    = strlen($header) + $sizePad + strlen($headerPostfix);
+        $scriptSize    = $headerSize + strlen($script);
+        $header       .= str_pad((string)$scriptSize, $sizePad, '0', STR_PAD_LEFT) . $headerPostfix;
+        $script        = $header . $script;
+
+        if (!file_put_contents($scriptFile, $script, LOCK_EX)) {
+            throw new FatalError('[049] Failed to write file ' . $scriptFile . '. Check write-permission.');
+        }
+        
+        @chmod($scriptFile, 0664);
     }
 
     private static function reportError($title, $message, $htmlPath, $currentLine) {
@@ -78,52 +112,6 @@ class Scripter {
             if (ob_get_level()) ob_end_flush();
         }
         exit;
-    }
-
-    private static function saveScript($scriptRoot, $scriptPath, $sizePad, $header, $script) {
-        
-        $scriptRoot = preg_replace(['~\\\\+~','~/$~'], ['/',''], $scriptRoot);
-
-        if (!is_dir($scriptRoot)) {
-            throw new FatalError('[051] Script root path not found: '.$scriptRoot);
-        }
-        if (!is_readable($scriptRoot)) {
-            throw new FatalError('[052] Script root is not readable. Check web-server read-permission for: '.$scriptRoot);
-        }
-        if (DIRECTORY_SEPARATOR === '/' and !is_writable($scriptRoot)) {
-            //@note is_writable() might not work on some OS(old version Windows?).
-            throw new FatalError('[053] Script root is not writable. Check web-server write-permission: '.$scriptRoot);
-        }
-
-        $filePerms  = fileperms($scriptRoot);
-        $scriptPath = preg_replace('~[/\\\\]+~', '/', $scriptPath);
-        $scriptRelPath  = substr($scriptPath, strlen($scriptRoot)+1);
-        $scriptRelPathParts = explode('/', $scriptRelPath);
-        $filename = array_pop($scriptRelPathParts);
-        $path = $scriptRoot;
-
-        foreach ($scriptRelPathParts as $dir) {
-            $path .= '/'.$dir;
-            if (!is_dir($path)) {
-                if (!mkdir($path, $filePerms)) {
-                    throw new FatalError('[036] Cannot create directory '.$path.' Check write-permission.');
-                }
-            }
-        }
-
-        $headerPostfix = ' */ ?>'."\n";
-        $headerSize = strlen($header) + $sizePad + strlen($headerPostfix);
-        $scriptSize = $headerSize + strlen($script);
-        $header .= str_pad((string)$scriptSize, $sizePad, '0', STR_PAD_LEFT) . $headerPostfix;
-        $script = $header . $script;
-        $scriptFile = $path.'/'.$filename;
-
-        if (!file_put_contents($scriptFile, $script, LOCK_EX)) {
-            throw new FatalError('[049] failed to write file '.$scriptFile.' Check write-permission.');
-        }
-        if (!chmod($path.'/'.$filename, $filePerms)) {
-            throw new FatalError('[050] Cannot set permission for '.$scriptFile.'. Check the write-permission.');
-        }
     }
 
     public static function decreaseUserCode($parsedUserCode) {

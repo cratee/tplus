@@ -101,7 +101,7 @@ class Tplus {
                 return false;
             }
             if ($this->needsScripting($htmlPath, $scriptPath)) {
-                $this->script($htmlPath, $scriptPath);
+                $this->script($path, $htmlPath);
             }
 
         } else if (!is_file($scriptPath)) {
@@ -115,11 +115,11 @@ class Tplus {
         return $scriptPath;
     }
     
-    private function script($htmlPath, $scriptPath) {
+    private function script($path, $htmlPath) {
         require_once __DIR__.'/TplusScripter.php';
         \Tplus\Scripter::script(
-            $htmlPath, 
-            $scriptPath, 
+            $path,
+            $htmlPath,
             self::SCRIPT_SIZE_PAD, 
             $this->scriptHeader($htmlPath), 
             $this->config
