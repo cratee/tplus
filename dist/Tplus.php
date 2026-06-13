@@ -89,8 +89,10 @@ class Tplus {
     }
 
     private function getScriptPath($path) {
-        $htmlPath   = $this->config['HtmlRoot'].$path;
-        $scriptPath = $this->config['HtmlScriptRoot'].$path.'.php';
+
+        $path       = ltrim(str_replace('\\', '/', $path), '/');
+        $htmlPath   = rtrim(str_replace('\\', '/', $this->config['HtmlRoot']), '/') . '/' . $path;
+        $scriptPath = rtrim(str_replace('\\', '/', $this->config['HtmlScriptRoot']), '/') . '/' . $path . '.php';
 
         if ($this->config['ScriptCheck']) {
             if (!is_file($htmlPath)) {
@@ -101,7 +103,7 @@ class Tplus {
                 return false;
             }
             if ($this->needsScripting($htmlPath, $scriptPath)) {
-                $this->script($path, $htmlPath);
+                $this->script($htmlPath, $scriptPath);
             }
 
         } else if (!is_file($scriptPath)) {
@@ -115,11 +117,11 @@ class Tplus {
         return $scriptPath;
     }
     
-    private function script($path, $htmlPath) {
+    private function script($htmlPath, $scriptPath) {
         require_once __DIR__.'/TplusScripter.php';
         \Tplus\Scripter::script(
-            $path,
-            $htmlPath,
+            $htmlPath, 
+            $scriptPath,
             self::SCRIPT_SIZE_PAD, 
             $this->scriptHeader($htmlPath), 
             $this->config

@@ -41,14 +41,14 @@ class Scripter {
     public static $loopHelper;
     public static $userCode;
 
-    public static function script($path, $htmlPath, $sizePad, $header, $config) {
+    public static function script($htmlPath, $scriptPath, $sizePad, $header, $config) {
     
         self::$wrapper = '\\'.(empty($config['Wrapper']) ? 'TplWrapper' : $config['Wrapper']);
         self::$loopHelper = '\\'.(empty($config['LoopHelper']) ? 'TplLoopHelper' : $config['LoopHelper']);
 
         try {
             self::$userCode = self::getHtml($htmlPath);            
-            self::saveScript($path, $sizePad, $header, $config, self::parse()); 
+            self::saveScript($scriptPath, $sizePad, $header, self::parse()); 
 
         } catch(SyntaxError $e) {
             self::reportError('Tplus Scripter Syntax Error ', $e->getMessage(), $htmlPath, self::$currentLine);
@@ -58,12 +58,9 @@ class Scripter {
         }
     }
 
-    private static function saveScript($path, $sizePad, $header, $config, $script) {
-        
-        $scriptRoot = rtrim(str_replace('\\', '/', $config['HtmlScriptRoot']), '/');
-        $path       = ltrim(str_replace('\\', '/', $path), '/');
-        $scriptFile = $scriptRoot . '/' . $path . '.php';
-        $targetDir = dirname($scriptFile);
+    private static function saveScript($scriptPath, $sizePad, $header, $script) {
+
+        $targetDir = dirname($scriptPath);
 
         if (!is_dir($targetDir)) {
             if (!mkdir($targetDir, 0775, true)) {
@@ -84,11 +81,11 @@ class Scripter {
         $header       .= str_pad((string)$scriptSize, $sizePad, '0', STR_PAD_LEFT) . $headerPostfix;
         $script        = $header . $script;
 
-        if (!file_put_contents($scriptFile, $script, LOCK_EX)) {
-            throw new FatalError('[049] Failed to write file ' . $scriptFile . '. Check write-permission.');
+        if (!file_put_contents($scriptPath, $script, LOCK_EX)) {
+            throw new FatalError('[049] Failed to write file ' . $scriptPath . '. Check write-permission.');
         }
         
-        @chmod($scriptFile, 0664);
+        @chmod($scriptPath, 0664);
     }
 
     private static function reportError($title, $message, $htmlPath, $currentLine) {
