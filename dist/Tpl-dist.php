@@ -79,10 +79,7 @@ class TplWrapper extends TplusWrapper {
 
 class TplLoopHelper extends TplusLoopHelper {
 
-	protected $i;
-	protected $s;
-	protected $k;
-	protected $v;
+	protected $i, $s, $k, $v;
 
 	public function isEven() {
 		return $this->i % 2 ? true : false;
