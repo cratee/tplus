@@ -3,7 +3,7 @@
 class Tplus {
     
     const SCRIPT_SIZE_PAD = 9;
-    const VERSION = '1.2.1';
+    const VERSION = '1.2.2';
 
     private $config;
     private $data=[];
@@ -24,17 +24,12 @@ class Tplus {
         } else if (is_string($keyOrArray)) {
             $this->data[$keyOrArray] = $val;
 
-        } else {
-            trigger_error("assign() expects array or string.", E_USER_ERROR);
         }
-
         return '';
     }
 
     public function get($path) {
-        if (!$scriptPath = $this->getScriptPath($path)) {
-            return '';
-        }
+        $scriptPath = $this->getScriptPath($path);
 
         $V = &$this->data;
 
@@ -96,22 +91,24 @@ class Tplus {
 
         if ($this->config['ScriptCheck']) {
             if (!is_file($htmlPath)) {
-                trigger_error(
-                    "Tpl config `'ScriptCheck' => true` but Tplus cannot find HTML file: `{$htmlPath}`",
-                    E_USER_ERROR
-                );
-                return false;
+                require_once __DIR__.'/TplusError.php';                
+                \TplusError::directHandle([
+                    'type' => E_USER_ERROR,
+                    'message' => "Tpl config ['ScriptCheck' => true] but Tplus cannot find HTML file: <b style=\"color:#d00\">{$htmlPath}</b>",
+                ]);
+                exit;
             }
             if ($this->needsScripting($htmlPath, $scriptPath)) {
                 $this->script($htmlPath, $scriptPath);
             }
 
         } else if (!is_file($scriptPath)) {
-            trigger_error(
-                "Tpl config `'ScriptCheck' => false` but Tplus cannot find Script file: `{$scriptPath}`",
-                E_USER_ERROR
-            );
-            return false;
+            require_once __DIR__.'/TplusError.php';
+            \TplusError::directHandle([
+                'type' => E_USER_ERROR,
+                'message' => "Tpl config ['ScriptCheck' => false] but Tplus cannot find Script file:  <b style=\"color:#d00\">{$scriptPath}</b>",
+            ]);
+            exit;
         }
 
         return $scriptPath;

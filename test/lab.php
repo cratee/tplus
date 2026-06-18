@@ -5,7 +5,7 @@
 
 include '../dist/Tpl-dist.php';
 
-echo \Tpl::get('subdir/file.html', []);
+echo \Tpl::get('subdir/filxe.html', []);
 
 //echo \Tpl::get('lab.html', []);
 

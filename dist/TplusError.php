@@ -1,60 +1,122 @@
 <?php
-
 class TplusError {
 
-    private static $hashes=[];
+    private static $hashes = [];
+
+    public static function directHandle($e) {
+        $caller_file = __FILE__;
+        $caller_line = __LINE__;
+
+        $all_trace = debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS);
+        foreach ($all_trace as $fr) {
+            if (!empty($fr['file'])) {
+                $trace_fn = basename($fr['file']);
+                if (substr($trace_fn, 0, 3) !== 'Tpl') {
+                    $caller_file = $fr['file'];
+                    $caller_line = $fr['line'];
+                    break;
+                }
+            }
+        }
+        $caller_code = '';
+        if (is_file($caller_file)) {
+            $file_obj = new \SplFileObject($caller_file);
+            $target_line = $caller_line - 1;
+            if ($target_line >= 0) {
+                $file_obj->seek($target_line);
+                if ($file_obj->valid()) {
+                    $caller_code = trim($file_obj->current());
+                }
+            }
+        }
+        self::render([
+            'type'    => E_USER_ERROR,
+            'message' => $e['message'],
+            'file'    => $caller_file,
+            'line'    => $caller_line,
+            'code'    => $caller_code,
+            'isHtml' => true,
+        ]);
+    }
 
     public static function handle($e) {
-        if (!$e) {
-            return;
+        if (!$e) return;
+
+        if ($e instanceof \Throwable) {
+            $e = [
+                'type'    => E_USER_ERROR,
+                'message' => $e->getMessage(),
+                'file'    => $e->getFile(),
+                'line'    => $e->getLine()
+            ];
         }
 
+        $file = '';
+        $line = '';
+        $code = '';
+        
+        [$file, $line, $code] = self::getTplErrorInfo($e['file'], $e['line']);
+
+        if (!$file) {
+            $trace = debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS);
+            foreach ($trace as $fr) {
+                if (!empty($fr['file']) && !empty($fr['line'])) {
+                    [$f, $l, $c] = self::getTplErrorInfo($fr['file'], $fr['line']);
+                    if ($f) { 
+                        $file = $f; 
+                        $line = $l; 
+                        $code = $c; 
+                        break; 
+                    }
+                }
+            }
+        }
+
+        if (!$file) {
+            $file = $e['file'];
+            $line = $e['line'];
+        }
+
+        self::render([
+            'type'    => $e['type'],
+            'message' => $e['message'],
+            'file'    => $file,
+            'line'    => $line,
+            'isHtml'  => false,
+            'code'    => $code
+        ]);
+    }
+
+    private static function render($e) {
         $hash = md5(json_encode($e));
         if (isset(self::$hashes[$hash])) return;
         self::$hashes[$hash] = true;
 
         $date = date('[Y-m-d H:i:s]');
         $phpMessage = "{$e['message']} in {$e['file']} on line {$e['line']}";
-
-        [$file, $line, $code] = self::getTplErrorInfo($e['file'], $e['line']);
-
-
-        if (!$file) {
-            $trace = debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS);
-            foreach ($trace as $fr) {
-                if (!empty($fr['file']) && !empty($fr['line'])) {
-                    [$f,$l,$c] = self::getTplErrorInfo($fr['file'], $fr['line']);
-                    if ($f) { $file=$f; $line=$l; $code=$c; break; }
-                }
-            }
-        }
-
         $runtimeType = self::getErrorType($e['type']);
 
-        if ($file) {
-            if (ini_get('log_errors')) {
-                error_log("{$date}[Tplus] {$file}:{$line} {$code} => {$phpMessage}");
-            }
-            if (ini_get('display_errors')) {
-                TplusErrorToBrowser::display(
-                    $file, 
-                    $line, 
-                    $code, 
-                    $phpMessage, 
-                    "Tplus Runtime Error",
-                    $runtimeType
-                );
-            }
-        } else {
-            
-            if (ini_get('log_errors')) {
-                error_log($date.'[Tplus Runtime Debugging Fails]'.$phpMessage);
-            }
-            if (ini_get('display_errors')) {
-                echo '[Tplus Runtime Debugging Fails] '.$phpMessage;
-            }
+        $file = $e['file'];
+        $line = $e['line'];
+        $code = $e['code'];
+
+
+        if (ini_get('log_errors')) {
+            error_log("{$date}[Tplus] {$file}:{$line} {$code} => {$phpMessage}");
+        }
+        if (ini_get('display_errors')) {
+            TplusErrorToBrowser::display(
+                $file, 
+                $line, 
+                $code, 
+                $e['message'],
+                "Tplus Runtime Error",
+                $e['isHtml'], 
+                $runtimeType
+            );
         }
     }
+
     private static function getTplErrorInfo($phpFile, $phpLine) {
 
         $lines = @file($phpFile, FILE_IGNORE_NEW_LINES);
@@ -128,7 +190,7 @@ class TplusError {
 class TplusErrorToBrowser {
     private static $count=0;
     
-    public static function display($file, $line, $code, $message, $title, $runtimeType=null) {
+    public static function display($file, $line, $code, $message, $title, $isHtml, $runtimeType=null) {
 
         if ($runtimeType) {
             $titleClass =  'tplus-runtime-title';
@@ -141,7 +203,11 @@ class TplusErrorToBrowser {
 
         $file = self::esc((string)$file);
         $code = self::esc((string)$code);
-        $message = nl2br(self::esc($message), false);
+
+        if (!$isHtml) {
+            $message = self::esc($message);
+        }
+        $message = nl2br($message, false);
 
         $messageTitle = $runtimeType ? 'PHP Message' : 'Message';
 

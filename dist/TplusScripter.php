@@ -1,8 +1,8 @@
 <?php
 /**
  *  ------------------------------------------------------------------------------
- *  Tplus 1.2.1
- *  Released 2026-06-11
+ *  Tplus 1.2.2
+ *  Released 2026-06-18
  * 
  * 
  *  The MIT License (MIT)
@@ -104,7 +104,8 @@ class Scripter {
                 $currentLine,
                 Statement::$rawTag,
                 $message,
-                $title
+                $title,
+                false
             );
             if (ob_get_level()) ob_end_flush();
         }
