@@ -171,29 +171,25 @@ class Tplus {
     }
 
     private function modifyErrorReporting() {
-        if (!$this->_changeErrorReporting()) {
-            return;
+        if (self::shouldIgnoreMissing()) {
+            $this->phpReport = error_reporting();
+            $AssignErrorBit = $this->_getAssignErrorBit();
+            error_reporting($this->phpReport & ~$AssignErrorBit);
         }
-        $this->phpReport = error_reporting();
-        $AssignErrorBit = $this->_getAssignErrorBit();
-        error_reporting($this->phpReport & ~$AssignErrorBit);
     }
     private function restoreErrorReporting() {
-        if (!$this->_changeErrorReporting()) {
-            return;
+        if (self::shouldIgnoreMissing()) {
+            error_reporting($this->phpReport);
         }
-        error_reporting($this->phpReport);
     }
     private function _getAssignErrorBit() {
         return (PHP_VERSION_ID < 80000) ? E_NOTICE : E_WARNING;
     }
-    private function _changeErrorReporting() {
+
+
+    private static function shouldIgnoreMissing() {
         return isset(self::$config['AssignCheck']) and self::$config['AssignCheck']==false;
     }
-
-    /**
-     * run Data Chain
-     */
     private static function runChain($var, $chain) {
         if (empty($chain)) {
             return $var;
@@ -227,13 +223,11 @@ class Tplus {
         return $var;
     }
     private static function throw($message) {
-        if (isset(self::$config['AssignCheck']) && self::$config['AssignCheck'] === false) {
-           return;
+        if (!self::shouldIgnoreMissing()) {
+            require_once __DIR__ . '/TplusError.php';
+            throw new \Exception($message);
         }
-        require_once __DIR__ . '/TplusError.php';
-        throw new \Exception($message);
     }
-
 }
 
 

@@ -41,9 +41,17 @@ class TplusError {
     public static function handle($e) {
 
         if ($e instanceof \Throwable) {
+            
             $trace = $e->getTrace();
+            
+            if ($e instanceof \Error) {
+                $type = E_USER_ERROR;
+            } else {
+                $type = (PHP_VERSION_ID < 80000) ? E_USER_NOTICE : E_USER_WARNING;
+            }
+
             $e = [
-                'type'    => (PHP_VERSION_ID < 80000) ? E_USER_NOTICE : E_USER_WARNING,
+                'type'    => $type,
                 'message' => $e->getMessage(),
                 'file'    => $e->getFile(),
                 'line'    => $e->getLine()
