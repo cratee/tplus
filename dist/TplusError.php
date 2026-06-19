@@ -3,7 +3,7 @@ class TplusError {
 
     private static $hashes = [];
 
-    public static function directHandle($e) {
+    public static function directHandle($message) {
         $caller_file = __FILE__;
         $caller_line = __LINE__;
 
@@ -31,46 +31,33 @@ class TplusError {
         }
         self::render([
             'type'    => E_USER_ERROR,
-            'message' => $e['message'],
+            'message' => $message,
             'file'    => $caller_file,
             'line'    => $caller_line,
             'code'    => $caller_code,
             'isHtml' => true,
         ]);
     }
-
     public static function handle($e) {
-        if (!$e) return;
 
         if ($e instanceof \Throwable) {
+            $trace = $e->getTrace();
             $e = [
-                'type'    => E_USER_ERROR,
+                'type'    => (PHP_VERSION_ID < 80000) ? E_USER_NOTICE : E_USER_WARNING,
                 'message' => $e->getMessage(),
                 'file'    => $e->getFile(),
                 'line'    => $e->getLine()
             ];
-        }
-
-        $file = '';
-        $line = '';
-        $code = '';
-        
-        [$file, $line, $code] = self::getTplErrorInfo($e['file'], $e['line']);
-
-        if (!$file) {
+            
+        } else if (is_array($e)) {
             $trace = debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS);
-            foreach ($trace as $fr) {
-                if (!empty($fr['file']) && !empty($fr['line'])) {
-                    [$f, $l, $c] = self::getTplErrorInfo($fr['file'], $fr['line']);
-                    if ($f) { 
-                        $file = $f; 
-                        $line = $l; 
-                        $code = $c; 
-                        break; 
-                    }
-                }
-            }
+
+        } else {
+            return;
+
         }
+
+        [$file, $line, $code] = self::getTplErrorInfo($e['file'], $e['line'], $trace);
 
         if (!$file) {
             $file = $e['file'];
@@ -86,7 +73,6 @@ class TplusError {
             'code'    => $code
         ]);
     }
-
     private static function render($e) {
         $hash = md5(json_encode($e));
         if (isset(self::$hashes[$hash])) return;
@@ -117,23 +103,42 @@ class TplusError {
         }
     }
 
-    private static function getTplErrorInfo($phpFile, $phpLine) {
+    private static function getTplErrorInfo($phpFile, $phpLine, $trace) {
+        array_unshift($trace, ['file' => $phpFile, 'line' => $phpLine]);
 
-        $lines = @file($phpFile, FILE_IGNORE_NEW_LINES);
+        foreach ($trace as $step) {
+            if (empty($step['file']) || empty($step['line'])) {
+                continue;
+            }
 
-        $tplFile = '';
+            try {
+                $fileObj = new \SplFileObject($step['file'], 'r');
+            } catch (\RuntimeException $e) {
+                continue;
+            }
 
-        if (preg_match('~Tplus(?:\s\S+){3}\s(.+?)\s\d+\s\*/~', $lines[0], $m)) {
+            $fileObj->seek(0);
+            $firstLine = $fileObj->current();
+
+            if (!$firstLine || !preg_match('~Tplus(?:\s\S+){3}\s(.+?)\s\d+\s\*/~', $firstLine, $m)) {
+                continue;
+            }
             $tplFile = $m[1];
-        }        
 
-        if (preg_match('~/\*\s*(\{.*\})\s*\*/\s*\?>~', $lines[$phpLine-1], $m)) {
-            $json = json_decode($m[1], true);
+            $targetLineIndex = $step['line'] - 1;
+            $fileObj->seek($targetLineIndex);
+            
+            if ($fileObj->key() === $targetLineIndex) {
+                $lineContent = $fileObj->current();
+                if (preg_match('~/\*\s*(\{.+?\})\s*\*/\s*\?>~', $lineContent, $m)) {
+                    $json = json_decode($m[1], true);
+                    if ($json) {
+                        return [$tplFile, $json['line'], $json['code']];
+                    }
+                }
+            }
         }
 
-        if ($tplFile and $json) {
-            return [ $tplFile, $json['line'], $json['code']];
-        }
         return [null, null, null];
     }
 

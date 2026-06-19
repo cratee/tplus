@@ -3,17 +3,18 @@
 class Tplus {
     
     const SCRIPT_SIZE_PAD = 9;
-    const VERSION = '1.2.2';
+    const VERSION = '1.2.2-p1';
 
-    private $config;
     private $data=[];
     private $phpReport;
     private $scripted = false;
+
+    private static $config;
     private static $renderDepth=0;
     private static $isShutdownRegistered = false;
 
     public function __construct($config) {
-        $this->config = $config;
+        self::$config = $config;
     }
 
 
@@ -48,6 +49,10 @@ class Tplus {
             $render_result = '';
             require $scriptPath;
             $render_result = ob_get_clean();
+
+        } catch (\Throwable $e) {
+            require_once __DIR__ . '/TplusError.php';
+            \TplusError::handle($e);
 
         } finally {
             if (ob_get_level() > $ob_level) {
@@ -86,32 +91,27 @@ class Tplus {
     private function getScriptPath($path) {
 
         $path       = ltrim(str_replace('\\', '/', $path), '/');
-        $htmlPath   = rtrim(str_replace('\\', '/', $this->config['HtmlRoot']), '/') . '/' . $path;
-        $scriptPath = rtrim(str_replace('\\', '/', $this->config['HtmlScriptRoot']), '/') . '/' . $path . '.php';
+        $htmlPath   = rtrim(str_replace('\\', '/', self::$config['HtmlRoot']), '/') . '/' . $path;
+        $scriptPath = rtrim(str_replace('\\', '/', self::$config['HtmlScriptRoot']), '/') . '/' . $path . '.php';
 
-        if ($this->config['ScriptCheck']) {
+        if (self::$config['ScriptCheck']) {
             if (!is_file($htmlPath)) {
-                require_once __DIR__.'/TplusError.php';                
-                \TplusError::directHandle([
-                    'type' => E_USER_ERROR,
-                    'message' => "Tpl config ['ScriptCheck' => true] but Tplus cannot find HTML file: <b style=\"color:#d00\">{$htmlPath}</b>",
-                ]);
-                exit;
+                $this->die("Tpl config ['ScriptCheck' => true] but Tplus cannot find HTML file: <b style=\"color:#d00\">{$htmlPath}</b>");
             }
             if ($this->needsScripting($htmlPath, $scriptPath)) {
                 $this->script($htmlPath, $scriptPath);
             }
 
         } else if (!is_file($scriptPath)) {
-            require_once __DIR__.'/TplusError.php';
-            \TplusError::directHandle([
-                'type' => E_USER_ERROR,
-                'message' => "Tpl config ['ScriptCheck' => false] but Tplus cannot find Script file:  <b style=\"color:#d00\">{$scriptPath}</b>",
-            ]);
-            exit;
+            $this->die("Tpl config ['ScriptCheck' => false] but Tplus cannot find Script file:  <b style=\"color:#d00\">{$scriptPath}</b>");
         }
 
         return $scriptPath;
+    }
+    private function die($message) {
+        require_once __DIR__.'/TplusError.php';                
+        \TplusError::directHandle($message);
+        exit;
     }
     
     private function script($htmlPath, $scriptPath) {
@@ -121,7 +121,7 @@ class Tplus {
             $scriptPath,
             self::SCRIPT_SIZE_PAD, 
             $this->scriptHeader($htmlPath), 
-            $this->config
+            self::$config
         );
 
         $this->scripted = true;
@@ -185,10 +185,10 @@ class Tplus {
         error_reporting($this->phpReport);
     }
     private function _getAssignErrorBit() {
-        return version_compare(phpversion(), '8.0.0', '<') ? E_NOTICE : E_WARNING;
+        return (PHP_VERSION_ID < 80000) ? E_NOTICE : E_WARNING;
     }
     private function _changeErrorReporting() {
-        return isset($this->config['AssignCheck']) and $this->config['AssignCheck']==false;
+        return isset(self::$config['AssignCheck']) and self::$config['AssignCheck']==false;
     }
 
     /**
@@ -203,7 +203,7 @@ class Tplus {
         foreach ($chain as $i => $name) {
             if (is_array($var)) {
                 if (!array_key_exists($name, $var)) {
-                    trigger_error("Tplus Runtime: Index `{$name}` not found in array.");
+                    self::throw("Tplus Runtime: Index `{$name}` not found in array.");
                     return null;
                 }
                 $var = $var[$name];
@@ -211,20 +211,27 @@ class Tplus {
                 try {
                     $var = $var->$name;
                 } catch (\Throwable $e) {
-                    trigger_error("Tplus Runtime: Property `{$name}` not found in object of class " . get_class($var));
+                    self::throw("Tplus Runtime: Property `{$name}` not found in object of class " . get_class($var));
                     return null;
                 }
             } else if (is_null($var)) {
-                trigger_error("Tplus Runtime: Cannot access key `{$name}` on a null value.");
+                self::throw("Tplus Runtime: Cannot access key `{$name}` on a null value.");
                 return null;
             } else {
                 if ($i !== $lastIndex) {
-                    trigger_error("Tplus Runtime: Cannot access key `{$name}` on `{$var}`");
+                    self::throw("Tplus Runtime: Cannot access key `{$name}` on `{$var}`");
                     return null;
                 }
             }
         }
         return $var;
+    }
+    private static function throw($message) {
+        if (isset(self::$config['AssignCheck']) && self::$config['AssignCheck'] === false) {
+           return;
+        }
+        require_once __DIR__ . '/TplusError.php';
+        throw new \Exception($message);
     }
 
 }

@@ -43,17 +43,10 @@
 	<code>Tpl::setConfig()</code> 와 <code>Tpl::resetConfig()</code> 메소드를 추가했습니다.
             <ul>
                 <li>
-                    Tpl 클래스 내부에서만 html 경로 등 환경설정을 할 수 있었는데, 이제 외부에서도 간단하게 환경설정이 가능합니다.<br/>
-<code style="white-space: pre-wrap;">Tpl::setConfig([
-	'HtmlRoot' => './custom_html/',
-	'HtmlScriptRoot' => './custom_html.php/',
-]);</code>
+                    PHP 8.4 이상 호환을 위해 <code>trigger_error()</code> 사용 부분을 <code>TplusError::directHandle()</code> 로 대체했습니다. 
                 </li>
 
             </ul>
-        </li>
-        <li>
-          <code>Tpl::setConfig()</code>로 설정한 내용을 제거하고 Tpl 클래스 내부의 값으로 되돌릴려면 <code>Tpl::resetConfig();</code> 를 실행하면 됩니다
         </li>
     </ul>
 
@@ -62,7 +55,7 @@
 
 
   <p style="margin-top:100px">
-    <a href="https://github.com/cratee/tplus/archive/refs/tags/v1.2.1.zip">Tplus.1.2.1 다운로드</a>
+    <a href="https://github.com/cratee/tplus/archive/refs/tags/v1.2.2.zip">Tplus.1.2.2 다운로드</a>
     <a href="https://github.com/cratee/tplus/releases" target="_blank">깃허브</a>
     <a href="https://docs.google.com/document/d/1O93A68YkfdKxVLa1bSfJdeBNwDMqT5JfytocUA9EdJM/edit?usp=sharing" target="_blank">Tplus 설명서</a>
   </p>
