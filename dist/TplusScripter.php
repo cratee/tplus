@@ -1,8 +1,8 @@
 <?php
 /**
  *  ------------------------------------------------------------------------------
- *  Tplus 1.2.2-p1
- *  Released 2026-06-19
+ *  Tplus 1.2.2-p3
+ *  Released 2026-07-02
  * 
  * 
  *  The MIT License (MIT)
@@ -51,10 +51,10 @@ class Scripter {
             self::saveScript($scriptPath, $sizePad, $header, self::parse()); 
 
         } catch(SyntaxError $e) {
-            self::reportError('Tplus Scripter Syntax Error ', $e->getMessage(), $htmlPath, self::$currentLine);
+            self::reportError($e, $htmlPath, self::$currentLine);
 
         } catch(FatalError $e) {
-            self::reportError('Tplus Scripter Fatal Error ',  $e->getMessage(), $htmlPath, self::$currentLine);
+            self::reportError($e, $htmlPath, self::$currentLine);
         }
     }
 
@@ -64,15 +64,15 @@ class Scripter {
 
         if (!is_dir($targetDir)) {
             if (!mkdir($targetDir, 0775, true)) {
-                throw new FatalError('[036] Cannot create directory ' . $targetDir . '. Check write-permission.');
+                throw new FatalError("[036] Cannot create directory {$targetDir} Check write-permission.", 1);
             }
         }
         if (!is_readable($targetDir)) {
-            throw new FatalError('[052] Script root is not readable. Check web-server read-permission for: '.$targetDir);
+            throw new FatalError("[052] Script root is not readable. Check web-server read-permission for: {$targetDir}", 1);
         }
         if (DIRECTORY_SEPARATOR === '/' and !is_writable($targetDir)) {
             //@note is_writable() might not work on some OS(old version Windows?).
-            throw new FatalError('[053] Script root is not writable. Check web-server write-permission: '.$targetDir);
+            throw new FatalError("[053] Script root is not writable. Check web-server write-permission: {$targetDir}", 1);
         }
 
         $headerPostfix = ' */ ?>' . "\n";
@@ -82,31 +82,35 @@ class Scripter {
         $script        = $header . $script;
 
         if (!file_put_contents($scriptPath, $script, LOCK_EX)) {
-            throw new FatalError('[049] Failed to write file ' . $scriptPath . '. Check write-permission.');
+            throw new FatalError("[049] Failed to write file {$scriptPath} Check write-permission.", 1);
         }
         
         @chmod($scriptPath, 0664);
     }
 
-    private static function reportError($title, $message, $htmlPath, $currentLine) {
-
+    private static function reportError($e, $htmlPath, $currentLine) {
+        $message = $e->getMessage();
+        $userCodeContained = (1 !== $e->getCode());
         $htmlPath = realpath($htmlPath);
-        if (Statement::$rawTag) {
-            $message .= ' in `'.Statement::$rawTag.'`';
-        }
+        $title = "Tplus Scripter";
         if (ini_get('log_errors')) {
-            error_log($title. $message.' in '.$htmlPath.' on line '.$currentLine);
+            $logMessage = $message;
+            if ($userCodeContained) {
+                $logMessage .= " in {$htmlPath} on line {$currentLine}: ".Statement::$rawTag;
+            }
+            error_log("{$title}: {$logMessage}");
         }
         if (ini_get('display_errors')) {
             require_once __DIR__.'/TplusError.php';
-            \TplusErrorToBrowser::display(
-                $htmlPath,
-                $currentLine,
-                Statement::$rawTag,
-                $message,
-                $title,
-                false
-            );
+            \Tplus\Error::display([
+                'title'  => $title,
+                'type'   => '\\'.get_class($e),
+                'message'=> $message,
+                'escape' => true,
+                'file'   => $htmlPath,
+                'line'   => $currentLine,
+                'code'   => Statement::$rawTag                
+            ]);
             if (ob_get_level()) ob_end_flush();
         }
         exit;
@@ -128,7 +132,7 @@ class Scripter {
         if (!isset($methods[$class])) {
             $methods[$class] = [];
             if (!class_exists($class)) {
-                throw new FatalError('[039] Class "'.substr($class, 1).'" not found .');
+                throw new FatalError("[039] Class `".substr($class, 1)."` not found .");
             }
             $reflectionMethods = (new \ReflectionClass($class))->getMethods(\ReflectionMethod::IS_PUBLIC);
             foreach ($reflectionMethods as $m) {
@@ -260,8 +264,8 @@ class Scripter {
     }
 }
 
-class SyntaxError extends \Exception {}
-class FatalError extends \Exception {}
+class SyntaxError extends \Error {}
+class FatalError extends \Error {}
 
 class Stack {
     protected $items = [];
@@ -879,7 +883,7 @@ class Expression {
         if ($this->wrapperTrigger) {
             // .name after ParenthesisClose | BraceClose | BracketClose | Number | Quoted 
             if ($this->wrapperTrigger === 'ParenthesisClose') {
-                Checker::assertFunc($name);                                                                          //// ????
+                Checker::assertFunc($name);
             } else {
                 Checker::assertWrapper($name);
             }

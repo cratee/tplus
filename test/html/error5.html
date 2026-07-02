@@ -1,0 +1,202 @@
+
+<html>
+    <head>
+        <title>
+            Runtime Error Display
+        </title>
+    </head>
+<body>
+
+<style>
+.tplus {padding:3px}
+.tplus-error {width:100%;background:#ddd;border-spacing:3px;border-collapse:separate;border-radius: 4px;}
+.tplus-error td {border-radius: 2px;font:normal normal 13px tahoma, verdana, sans-serif;border:0px}
+.tplus-error-item {text-align:right;background:#ddd;color:#888;padding:3px 4px;width:90px;vertical-align:top}
+.tplus-error-item span{font:normal normal 12px consolas, monospace;background:#fb9;color:#e33;padding:1px 5px;text-align:center;border-radius:2px;float:left}
+.tplus-error-content {background:#f2f2f2;padding:3px 10px;}
+.tplus-error-content span {font-weight:bold}
+.tplus-error-content code {font:12px consolas, monospace;margin:0 4px;padding:1px 4px;border-radius:2px;vertical-align:1px}
+code.tplus-error-level1 {background:#262;color:#ada}
+code.tplus-error-level2 {background:#38c;color:#def}
+code.tplus-error-level3 {background:#c22;color:#fcc} 
+code.tplus-error-code {padding:0px;margin:0px;font-size:14px;font-weight:bold;}
+td.tplus-runtime-title {font-size:13px;font-weight:bold;color:#555; padding:3px 5px;}
+td.tplus-scripter-title{font-size:13px;font-weight:bold;color:#c22; padding:2px}
+td.tplus-scripter-title div{padding:4px 5px;border-radius:3px;float:left}
+div.tplus-syntax{background:#c20;color:#fcb;}
+div.tplus-fatal{background:#16a;color:#bdf;}
+
+
+.tplus {
+    display: grid;
+    grid-template-columns: 70px 1fr;
+    gap: 3px;
+    font:14px consolas,mono;
+    color:#555;
+    background: #ddd;
+    padding:3px;
+    margin:6px 3px;
+    border-radius:3px;
+  }
+.tplus > div {
+    padding:3px 7px;
+}
+.tplus > div:first-child { /* title */
+    grid-column: span 2;
+    font:bold 13px tahoma,verdana;
+}
+.tplus > div:nth-child(even) { /* left column */
+    text-align:right;
+    padding: 3px 3px;
+}
+.tplus > div:nth-child(even) + div {  /* right column */
+    border-radius:2px;
+    background:#f2f2f2;
+}
+.tplus > div:nth-child(3) > span {
+    color:#e33;
+    font-weight:bold;
+}
+</style>
+
+
+<div class="tplus">
+    <div><span>Tplus Runtime</span></div>
+    <div>Type</div><div><span>E_NOTICE</span></div>
+    <div>File</div><div>D:\Work\tplus\test\html\error1.html</div>
+    <div>Line</div><div>11</div>
+    <div>Code</div><div>[= unassignedVar]</div>
+    <div>Message</div><div>Undefined index: unassignedVar</div>
+</div>
+
+
+<div class="tplus">
+    <div><span>Tplus Runtime</span></div>
+    <div>Type</div><div><span>\Error</span></div>
+    <div>File</div><div>D:\Work\tplus\test\html\error1.html</div>
+    <div>Line</div><div>11</div>
+    <div>Code</div><div>[= unassignedObject.someMethod()]</div>
+    <div> Message</div><div>Call to a member function someMethod() on null</div>
+</div>
+
+<div class="tplus-error-container">
+<table class="tplus-error">
+<tr>
+    <td colspan="2" class="tplus-runtime-title"><div class="">Tplus Runtime Error</div></td>
+</tr>
+<tr>
+    <td class="tplus-error-item">
+        <span>3</span> Type
+    </td>
+    <td class="tplus-error-content">
+        <span>Throwable</span> 
+        <code class="">Error</code>
+    </td>
+</tr>
+<tr>
+    <td class="tplus-error-item">File</td>
+    <td class="tplus-error-content">D:\Work\tplus\test\html\error1.html</td>
+</tr>
+<tr>
+    <td class="tplus-error-item">Line</td>
+    <td class="tplus-error-content">11</td>
+</tr>
+<tr>
+    <td class="tplus-error-item">Code</td>
+    <td class="tplus-error-content"><code class="tplus-error-code">[= unassignedObject.someMethod()]</code></td>
+</tr>
+<tr>
+    <td class="tplus-error-item">PHP Message</td><td class="tplus-error-content">Call to a member function someMethod() on null</td>
+</tr>
+</table>
+</div>
+
+
+
+<style>
+.tplus-error-container {padding:3px}
+.tplus-error {width:100%;background:#ddd;border-spacing:3px;border-collapse:separate;border-radius: 4px;}
+.tplus-error td {border-radius: 2px;font:normal normal 13px tahoma, verdana, sans-serif;border:0px}
+.tplus-error-item {text-align:right;background:#ddd;color:#888;padding:3px 4px;width:90px;vertical-align:top}
+.tplus-error-item span{font:normal normal 12px consolas, monospace;background:#fb9;color:#e33;padding:1px 5px;text-align:center;border-radius:2px;float:left}
+.tplus-error-content {background:#f2f2f2;padding:3px 10px;}
+.tplus-error-content span {font-weight:bold}
+.tplus-error-content code {font:12px consolas, monospace;margin:0 4px;padding:1px 4px;border-radius:2px;vertical-align:1px}
+code.tplus-error-level1 {background:#262;color:#ada}
+code.tplus-error-level2 {background:#38c;color:#def}
+code.tplus-error-level3 {background:#c22;color:#fcc} 
+code.tplus-error-code {padding:0px;margin:0px;font-size:14px;font-weight:bold;}
+td.tplus-runtime-title {font-size:13px;font-weight:bold;color:#555; padding:3px 5px;}
+td.tplus-scripter-title{font-size:13px;font-weight:bold;color:#c22; padding:2px}
+td.tplus-scripter-title div{padding:4px 5px;border-radius:3px;float:left}
+div.tplus-syntax{background:#c20;color:#fcb;}
+div.tplus-fatal{background:#16a;color:#bdf;}
+</style>
+
+
+<div class="tplus-error-container">
+<table class="tplus-error">
+<tr>
+    <td colspan="2" class="tplus-runtime-title"><div class="">Tplus Runtime Error</div></td>
+</tr>
+<tr>
+    <td class="tplus-error-item">
+        <span>1</span> Type
+    </td>
+    <td class="tplus-error-content">
+        <span>PHP Error</span> 
+        <code class="">E_NOTICE</code>
+    </td>
+</tr>
+<tr>
+    <td class="tplus-error-item">File</td>
+    <td class="tplus-error-content">D:\Work\tplus\test\html\error1.html</td>
+</tr>
+<tr>
+    <td class="tplus-error-item">Line</td>
+    <td class="tplus-error-content">9</td>
+</tr>
+<tr>
+    <td class="tplus-error-item">Code</td>
+    <td class="tplus-error-content"><code class="tplus-error-code">[= unassignedVar]</code></td>
+</tr>
+<tr>
+    <td class="tplus-error-item">PHP Message</td><td class="tplus-error-content">Undefined index: unassignedVar</td>
+</tr>
+</table>
+</div>
+
+
+
+<div class="tplus-error-container">
+<table class="tplus-error">
+<tr>
+    <td colspan="2" class="tplus-runtime-title"><div class="">Tplus Runtime Error</div></td>
+</tr>
+<tr>
+    <td class="tplus-error-item">
+        <span>2</span> Type
+    </td>
+    <td class="tplus-error-content">
+        <span>PHP Error</span> 
+        <code class="">E_NOTICE</code>
+    </td>
+</tr>
+<tr>
+    <td class="tplus-error-item">File</td>
+    <td class="tplus-error-content">D:\Work\tplus\test\html\error1.html</td>
+</tr>
+<tr>
+    <td class="tplus-error-item">Line</td>
+    <td class="tplus-error-content">11</td>
+</tr>
+<tr>
+    <td class="tplus-error-item">Code</td>
+    <td class="tplus-error-content"><code class="tplus-error-code">[= unassignedObject.someMethod()]</code></td>
+</tr>
+<tr>
+    <td class="tplus-error-item">PHP Message</td><td class="tplus-error-content">Undefined index: unassignedObject</td>
+</tr>
+</table>
+</div>
+

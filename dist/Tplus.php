@@ -3,7 +3,7 @@
 class Tplus {
     
     const SCRIPT_SIZE_PAD = 9;
-    const VERSION = '1.2.2-p1';
+    const VERSION = '1.2.2-p3';
 
     private $data=[];
     private $phpReport;
@@ -52,7 +52,7 @@ class Tplus {
 
         } catch (\Throwable $e) {
             require_once __DIR__ . '/TplusError.php';
-            \TplusError::handle($e);
+            \Tplus\Error::handleThrowable($e);
 
         } finally {
             if (ob_get_level() > $ob_level) {
@@ -109,8 +109,12 @@ class Tplus {
         return $scriptPath;
     }
     private function die($message) {
-        require_once __DIR__.'/TplusError.php';                
-        \TplusError::directHandle($message);
+        require_once __DIR__.'/TplusError.php';
+        try {
+            throw new \Tplus\FileNotFound($message);
+        } catch(\Tplus\FileNotFound $e) {
+            \Tplus\Error::handleFileNotFound($e);
+        }
         exit;
     }
     
@@ -154,14 +158,14 @@ class Tplus {
         set_error_handler(function($type, $message, $file, $line) {
             if (error_reporting() & $type) {
                 require_once __DIR__.'/TplusError.php';
-                \TplusError::handle(['type'=>$type, 'message'=>$message, 'file'=>$file, 'line'=>$line]);
+                \Tplus\Error::handleLegacy(['type'=>$type, 'message'=>$message, 'file'=>$file, 'line'=>$line]);
             }
         });
 
         if (!self::$isShutdownRegistered) {
             register_shutdown_function(function() {            
                 require_once __DIR__.'/TplusError.php';
-                \TplusError::handle(error_get_last());
+                \Tplus\Error::handleLegacy(error_get_last());
             });
             self::$isShutdownRegistered = true;
         }
@@ -173,7 +177,7 @@ class Tplus {
     private function modifyErrorReporting() {
         if (self::shouldIgnoreMissing()) {
             $this->phpReport = error_reporting();
-            $AssignErrorBit = $this->_getAssignErrorBit();
+            $AssignErrorBit  = (PHP_VERSION_ID < 80000) ? E_NOTICE : E_WARNING;
             error_reporting($this->phpReport & ~$AssignErrorBit);
         }
     }
@@ -182,10 +186,6 @@ class Tplus {
             error_reporting($this->phpReport);
         }
     }
-    private function _getAssignErrorBit() {
-        return (PHP_VERSION_ID < 80000) ? E_NOTICE : E_WARNING;
-    }
-
 
     private static function shouldIgnoreMissing() {
         return isset(self::$config['AssignCheck']) and self::$config['AssignCheck']==false;
@@ -199,33 +199,35 @@ class Tplus {
         foreach ($chain as $i => $name) {
             if (is_array($var)) {
                 if (!array_key_exists($name, $var)) {
-                    self::throw("Tplus Runtime: Index `{$name}` not found in array.");
+                    self::trigger("Index `{$name}` not found in array.");
                     return null;
                 }
                 $var = $var[$name];
+
             } else if (is_object($var)) {
                 try {
                     $var = $var->$name;
                 } catch (\Throwable $e) {
-                    self::throw("Tplus Runtime: Property `{$name}` not found in object of class " . get_class($var));
+                    self::trigger("Property `{$name}` not found in object of class " . get_class($var));
                     return null;
                 }
+                
             } else if (is_null($var)) {
-                self::throw("Tplus Runtime: Cannot access key `{$name}` on a null value.");
+                self::trigger("Cannot access key `{$name}` on a null value.");
                 return null;
+
             } else {
                 if ($i !== $lastIndex) {
-                    self::throw("Tplus Runtime: Cannot access key `{$name}` on `{$var}`");
+                    self::trigger("Cannot access key `{$name}` on `{$var}`");
                     return null;
                 }
             }
         }
         return $var;
     }
-    private static function throw($message) {
+    private static function trigger($message) {
         if (!self::shouldIgnoreMissing()) {
-            require_once __DIR__ . '/TplusError.php';
-            throw new \Exception($message);
+            trigger_error($message, E_USER_WARNING);
         }
     }
 }

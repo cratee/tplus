@@ -1,118 +1,105 @@
 <?php
-class TplusError {
+namespace Tplus;
 
-    private static $hashes = [];
+class FileNotFound extends \Error {}
 
-    public static function directHandle($message) {
-        $caller_file = __FILE__;
-        $caller_line = __LINE__;
+class Error {
 
-        $all_trace = debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS);
-        foreach ($all_trace as $fr) {
-            if (!empty($fr['file'])) {
-                $trace_fn = basename($fr['file']);
-                if (substr($trace_fn, 0, 3) !== 'Tpl') {
-                    $caller_file = $fr['file'];
-                    $caller_line = $fr['line'];
-                    break;
-                }
+    public static function handleFileNotFound($e) {
+        
+        $file = '';
+        $line = '';
+        $code = '';
+
+        $trace = debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS);
+        foreach ($trace as $step) {
+            if (!empty($step['file']) and
+                strpos(basename($step['file']), 'Tpl') === false) {
+                $file = $step['file'];
+                $line = $step['line'];
+                break;
             }
         }
-        $caller_code = '';
-        if (is_file($caller_file)) {
-            $file_obj = new \SplFileObject($caller_file);
-            $target_line = $caller_line - 1;
-            if ($target_line >= 0) {
-                $file_obj->seek($target_line);
+
+        if (is_file($file)) {
+            $file_obj = new \SplFileObject($file);
+            if ($line > 0) {
+                $file_obj->seek($line - 1);
                 if ($file_obj->valid()) {
-                    $caller_code = trim($file_obj->current());
+                    $code = trim($file_obj->current());
                 }
             }
         }
-        self::render([
-            'type'    => E_USER_ERROR,
-            'message' => $message,
-            'file'    => $caller_file,
-            'line'    => $caller_line,
-            'code'    => $caller_code,
-            'isHtml' => true,
+        self::report([
+            'title'  =>'Tplus Runtime',
+            'type'   => '\\'.get_class($e),
+            'message'=> $e->getMessage(),
+            'escape' => false,
+            'file'   => $file,
+            'line'   => $line,
+            'code'   => $code
         ]);
     }
-    public static function handle($e) {
 
-        if ($e instanceof \Throwable) {
-            
-            $trace = $e->getTrace();
-            
-            if ($e instanceof \Error) {
-                $type = E_USER_ERROR;
-            } else {
-                $type = (PHP_VERSION_ID < 80000) ? E_USER_NOTICE : E_USER_WARNING;
-            }
+    public static function handleThrowable($e) {
 
-            $e = [
-                'type'    => $type,
-                'message' => $e->getMessage(),
-                'file'    => $e->getFile(),
-                'line'    => $e->getLine()
-            ];
-            
-        } else if (is_array($e)) {
-            $trace = debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS);
+        if (!$e instanceof \Throwable) return;
+    
+        [$file, $line, $code] = self::getTracedHtmlInfo($e->getFile(), $e->getLine(), $e->getTrace());
 
+        if (!$file) {
+            $file = $e->getFile();
+            $line = $e->getLine();
+        }
+        
+        self::report([
+            'title'  =>'Tplus Runtime',
+            'type'   => '\\'.get_class($e),
+            'message'=> $e->getMessage(),
+            'escape' => true,
+            'file'   => $file,
+            'line'   => $line,
+            'code'   => $code
+        ]);
+    }
+
+    public static function handleLegacy($e) {
+
+        if (!is_array($e)) return;
+
+        $trace = debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS);
+
+        if (E_USER_WARNING == $e['type']) {
+            $type = (PHP_VERSION_ID < 80000) ? 'E_NOTICE' : 'E_WARNING';
         } else {
-            return;
-
+            $type = [
+                E_NOTICE    =>'E_NOTICE',
+                E_WARNING   =>'E_WARNING',
+                E_DEPRECATED=>'E_DEPRECATED',
+                E_STRICT    =>'E_STRICT'
+            ][$e['type']] ?? '';
         }
 
-        [$file, $line, $code] = self::getTplErrorInfo($e['file'], $e['line'], $trace);
+        [$file, $line, $code] = self::getTracedHtmlInfo($e['file'], $e['line'], $trace);
 
         if (!$file) {
             $file = $e['file'];
             $line = $e['line'];
         }
 
-        self::render([
-            'type'    => $e['type'],
-            'message' => $e['message'],
-            'file'    => $file,
-            'line'    => $line,
-            'isHtml'  => false,
-            'code'    => $code
+        self::report([
+            'title'  =>'Tplus Runtime',
+            'type'   => $type,
+            'message'=> $e['message'],
+            'escape' => true,
+            'file'   => $file,
+            'line'   => $line,
+            'code'   => $code
         ]);
     }
-    private static function render($e) {
-        $hash = md5(json_encode($e));
-        if (isset(self::$hashes[$hash])) return;
-        self::$hashes[$hash] = true;
 
-        $date = date('[Y-m-d H:i:s]');
-        $phpMessage = "{$e['message']} in {$e['file']} on line {$e['line']}";
-        $runtimeType = self::getErrorType($e['type']);
-
-        $file = $e['file'];
-        $line = $e['line'];
-        $code = $e['code'];
-
-
-        if (ini_get('log_errors')) {
-            error_log("{$date}[Tplus] {$file}:{$line} {$code} => {$phpMessage}");
-        }
-        if (ini_get('display_errors')) {
-            TplusErrorToBrowser::display(
-                $file, 
-                $line, 
-                $code, 
-                $e['message'],
-                "Tplus Runtime Error",
-                $e['isHtml'], 
-                $runtimeType
-            );
-        }
-    }
-
-    private static function getTplErrorInfo($phpFile, $phpLine, $trace) {
-        array_unshift($trace, ['file' => $phpFile, 'line' => $phpLine]);
+    private static function getTracedHtmlInfo($file, $line, $trace) {
+        array_unshift($trace, ['file' => $file, 'line' => $line]);
 
         foreach ($trace as $step) {
             if (empty($step['file']) || empty($step['line'])) {
@@ -131,7 +118,7 @@ class TplusError {
             if (!$firstLine || !preg_match('~Tplus(?:\s\S+){3}\s(.+?)\s\d+\s\*/~', $firstLine, $m)) {
                 continue;
             }
-            $tplFile = $m[1];
+            $htmlFile = $m[1];
 
             $targetLineIndex = $step['line'] - 1;
             $fileObj->seek($targetLineIndex);
@@ -141,7 +128,7 @@ class TplusError {
                 if (preg_match('~/\*\s*(\{.+?\})\s*\*/\s*\?>~', $lineContent, $m)) {
                     $json = json_decode($m[1], true);
                     if ($json) {
-                        return [$tplFile, $json['line'], $json['code']];
+                        return [$htmlFile, $json['line'], $json['code']];
                     }
                 }
             }
@@ -150,148 +137,103 @@ class TplusError {
         return [null, null, null];
     }
 
-	private static function getErrorType($errorConst)
-	{
-		$list = [
-			'Parse error' => [
-				'E_PARSE',
-			],
-			'Fatal error' => [
-				'E_ERROR',
-				'E_CORE_ERROR',
-				'E_COMPILE_ERROR',
-				'E_USER_ERROR',
-			],
-			'Catchable fatal error' => [
-				'E_RECOVERABLE_ERROR',
-			],
-			'Warning' => [
-				'E_WARNING',
-				'E_CORE_WARNING',
-				'E_COMPILE_WARNING',
-				'E_USER_WARNING',
-			],
-			'Notice' => [
-				'E_NOTICE',
-				'E_DEPRECATED',
-				'E_USER_NOTICE',
-				'E_USER_DEPRECATED'
-			],
-			'Strict standards' => [
-				'E_STRICT'
-			]
-		];
+    private static $hashes = [];
 
-		foreach ($list as $errorGroup => $erroConstNames)
-		{
-			foreach ($erroConstNames as $name)
-			{
-				if	( $errorConst == constant($name) )
-				{
-                    switch ($errorGroup) {
-                        case 'Notice'  : $errorLevel = 1; break;
-                        case 'Warning' : $errorLevel = 2; break;
-                        default: $errorLevel = 3;
-                    }
-					return ['group'=>$errorGroup, 'name'=>$name, 'level'=>$errorLevel];
-				}
-			}
-		}
-	}
-}
+    private static function report($data) {
+        $hash = md5(json_encode($data));
+        if (isset(self::$hashes[$hash])) return;
+        self::$hashes[$hash] = true;
 
-class TplusErrorToBrowser {
-    private static $count=0;
-    
-    public static function display($file, $line, $code, $message, $title, $isHtml, $runtimeType=null) {
+        extract($data);
 
-        if ($runtimeType) {
-            $titleClass =  'tplus-runtime-title';
-            $titleDivClass = '';
-        } else {
-            $titleClass =  'tplus-scripter-title';
-            $titleDivClass = strstr($title, 'Syntax') ? 'tplus-syntax' : 'tplus-fatal';
+        if (ini_get('log_errors')) {
+            error_log("[Tplus] {$message} in {$file} on line {$line}: {$code}");
         }
-        $titleClass = $runtimeType ? 'tplus-runtime-title': 'tplus-scripter-title';
+        if (ini_get('display_errors')) {
+            self::display($data);
+        }
+    }
 
-        $file = self::esc((string)$file);
-        $code = self::esc((string)$code);
+    private static $count=0;
 
-        if (!$isHtml) {
+    public static function esc($s) {
+        return htmlspecialchars($s, ENT_NOQUOTES | ENT_SUBSTITUTE, 'UTF-8', false);
+    }    
+    public static function display($data) { //$file, $line, $code, $message, $escape, $title, $group='', $type='') {
+
+        extract($data);
+
+        $file = self::esc($file);
+        $code = self::esc($code);
+        if ($escape) {
             $message = self::esc($message);
         }
+
         $message = nl2br($message, false);
 
-        $messageTitle = $runtimeType ? 'PHP Message' : 'Message';
+        $typeClass = substr($type,0,2)==='E_' ? 'tplus-legacy' : 'tplus-throw';
 
         if ( ! self::$count) {
+            self::$count++;
 ?>
 
 <style>
-.tplus-error-container {padding:3px}
-.tplus-error {width:100%;background:#ddd;border-spacing:3px;border-collapse:separate;border-radius: 4px;}
-.tplus-error td {border-radius: 2px;font:normal normal 13px tahoma, verdana, sans-serif;border:0px}
-.tplus-error-item {text-align:right;background:#ddd;color:#888;padding:3px 4px;width:90px;vertical-align:top}
-.tplus-error-item span{font:normal normal 12px consolas, monospace;background:#fb9;color:#e33;padding:1px 5px;text-align:center;border-radius:2px;float:left}
-.tplus-error-content {background:#f2f2f2;padding:3px 10px;}
-.tplus-error-content span {font-weight:bold}
-.tplus-error-content code {font:12px consolas, monospace;margin:0 4px;padding:1px 4px;border-radius:2px;vertical-align:1px}
-code.tplus-error-level1 {background:#262;color:#ada}
-code.tplus-error-level2 {background:#38c;color:#def}
-code.tplus-error-level3 {background:#c22;color:#fcc} 
-code.tplus-error-code {padding:0px;margin:0px;font-size:14px;font-weight:bold;}
-td.tplus-runtime-title {font-size:13px;font-weight:bold;color:#555; padding:3px 5px;}
-td.tplus-scripter-title{font-size:13px;font-weight:bold;color:#c22; padding:2px}
-td.tplus-scripter-title div{padding:4px 5px;border-radius:3px;float:left}
-div.tplus-syntax{background:#c20;color:#fcb;}
-div.tplus-fatal{background:#16a;color:#bdf;}
+ 
+.tplus {
+    display: grid;
+    grid-template-columns: 70px 1fr;
+    gap: 3px;
+    font:14px consolas,mono;
+    color:#555;
+    background: #ddd;
+    padding:3px;
+    margin:6px 3px;
+    border-radius:3px;
+  }
+.tplus > div {
+    padding:3px 7px;
+}
+.tplus > div:first-child { /* title */
+    grid-column: span 2;
+    font:bold 13px tahoma,verdana;
+    padding:3px 3px;
+}
+.tplus > div:nth-child(even) { /* left column */
+    text-align:right;
+    padding: 3px 3px;
+}
+.tplus > div:nth-child(even) + div {  /* right column */
+    border-radius:2px;
+    background:#f2f2f2;
+}
+.tplus > div:nth-child(3) > span {
+    font-weight:bold;
+    background:#fff;
+    padding:0px 3px;border-radius:2px;
+}
+.tplus-legacy {
+    color:#0a3;
+}
+.tplus-throw {
+    color:#e33;
+}
+
 </style>
 
-<?php 
-		}
-?>
+<?php
+        }
 
-<div class="tplus-error-container">
-<table class="tplus-error">
-<tr>
-    <td colspan="2" class="<?=$titleClass?>"><div class="<?=$titleDivClass?>"><?=$title?></div></td>
-</tr>
-<?php if ($runtimeType) {?>
-<tr>
-    <td class="tplus-error-item">
-        <span><?=++self::$count?></span> Type
-    </td>
-    <td class="tplus-error-content">
-        <span><?=$runtimeType['group']?></span> 
-        <code class="tplus-error-level<?=(int)$runtimeType['level']?>"><?=$runtimeType['name']?></code>
-    </td>
-</tr>
-<?php }?>
-<tr>
-    <td class="tplus-error-item">File</td>
-    <td class="tplus-error-content"><?=htmlspecialchars($file)?></td>
-</tr>
-<tr>
-    <td class="tplus-error-item">Line</td>
-    <td class="tplus-error-content"><?=(string)$line?></td>
-</tr>
-<?php if ($code) {?>
-<tr>
-    <td class="tplus-error-item">Code</td>
-    <td class="tplus-error-content"><code class="tplus-error-code"><?=$code?></code></td>
-</tr>
-<?php }?>
-<tr>
-    <td class="tplus-error-item"><?=$messageTitle?></td><td class="tplus-error-content"><?=$message?></td>
-</tr>
-</table>
+?>
+<div class="tplus">
+    <div><span><?=$title?></span></div>
+    <div>Type</div><div><span class="<?=$typeClass?>"><?=$type?></span></div>
+    <div>File</div><div><?=$file?></div>
+    <div>Line</div><div><?=$line?></div>
+    <div>Code</div><div><?=$code?></div>
+    <div>Message</div><div><?=$message?></div>
 </div>
 
+
 <?php 
     }
-
-    private static function esc($s) {
-        return htmlspecialchars($s, ENT_NOQUOTES | ENT_SUBSTITUTE, 'UTF-8', false);
-    }
-
 }
