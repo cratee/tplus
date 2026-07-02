@@ -75,8 +75,8 @@ class Error {
             $type = [
                 E_NOTICE    =>'E_NOTICE',
                 E_WARNING   =>'E_WARNING',
-                E_DEPRECATED=>'E_DEPRECATED',
-                E_STRICT    =>'E_STRICT'
+                E_DEPRECATED=>'E_DEPRECATED'
+                
             ][$e['type']] ?? '';
         }
 
