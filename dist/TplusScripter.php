@@ -1,8 +1,8 @@
 <?php
 /**
  *  ------------------------------------------------------------------------------
- *  Tplus 1.2.2-p3
- *  Released 2026-07-02
+ *  Tplus 1.2.3
+ *  Released 2026-08-26
  * 
  * 
  *  The MIT License (MIT)
@@ -71,7 +71,7 @@ class Scripter {
             throw new FatalError("[052] Script root is not readable. Check web-server read-permission for: {$targetDir}", 1);
         }
         if (DIRECTORY_SEPARATOR === '/' and !is_writable($targetDir)) {
-            //@note is_writable() might not work on some OS(old version Windows?).
+            // NOTE: is_writable() might not work on some OS(old version Windows?).
             throw new FatalError("[053] Script root is not writable. Check web-server write-permission: {$targetDir}", 1);
         }
 
@@ -179,11 +179,15 @@ class Scripter {
                 $comment = self::getComment(self::$userCode);
                 self::decreaseUserCode($comment);
 
+            } else if (':' === $command && preg_match('~^[a-zA-Z_\-]~', self::$userCode)) {
+                // NOTE: Avoid parsing CSS selectors (like Tailwind) & maintain backward compatibility
+                $resultScript .= $htmlLeftCmnt . $leftTag . $command;
+
             } else {
                 $statement = Statement::script($command);
                 if (false === $statement) {
                     // [:][/] out of [@] or [?] blocks.
-                    $resultScript .= $htmlLeftCmnt.$leftTag./*$escape.*/$command;
+                    $resultScript .= $htmlLeftCmnt . $leftTag . /*$escape.*/$command;
                 } else {
                     $resultScript .= $statement;
                 }
@@ -216,7 +220,7 @@ class Scripter {
 
     private static function findScriptTag() {
         $scriptTagPattern = ini_get('short_open_tag') ? '~(<\?)~' : '~(<\?(php\s|=))~i';
-        // @note Since php 7.0, <% and <script language=php> are removed.
+        // NOTE: Since php 7.0, <% and <script language=php> are removed.
 
         $split = preg_split(
             $scriptTagPattern,
@@ -376,8 +380,8 @@ class Statement {
     }
     private static function parseRightTag() {
         $pattern = 
-        // @note pcre modifier 'x' means that white-spaces in pattern are ignored.
-        // @note pcre modifier 's' means that dot(.) contains newline.
+        // NOTE: pcre modifier 'x' means that white-spaces in pattern are ignored.
+        // NOTE: pcre modifier 's' means that dot(.) contains newline.
         '~  
             ^\s*
             \]
@@ -611,7 +615,7 @@ class CxStop {
         }
 
         $map = self::$map[$parentCxt] ?? null;
-        // @note after ternary expression is finished, `)` in [= a?b:c )] --> $parentCxt==0 --> $map == null  
+        // NOTE: after ternary expression is finished, `)` in [= a?b:c )] --> $parentCxt==0 --> $map == null  
 
         if (!empty($map['end']) and in_array($stopCode, $map['end'])) {
             return true;
@@ -748,7 +752,7 @@ class Expression {
         }
         if ((!$prevToken['group'] || $prevToken['group'] & (Token::OPERATOR|Token::UNARY))
             and $currToken['group'] === Token::OPERATOR) {
-            // @note OPEN|CLOSE|DELIMITER are checked in CxStop::isValid()
+            // NOTE: OPEN|CLOSE|DELIMITER are checked in CxStop::isValid()
             throw new SyntaxError("[011] Unexpected `{$tokens}`");
         }
         if ($prevToken['group'] === Token::UNARY and $currToken['group']===Token::UNARY) {
@@ -798,7 +802,7 @@ class Expression {
         return '?';
     }
 
-    // @note stopCodes )}]:, have already been checked in CxStop::isValid()
+    // NOTE: stopCodes )}]:, have already been checked in CxStop::isValid()
     private function parseParenthesisClose($prevToken, $currToken) {
         return ')';
     }
@@ -1044,14 +1048,14 @@ class LoopMember {
         }
         if (count($names)===2 and Checker::isFunc()) {
 
-            //@note i,s and k cannot be object and so cannot have non-wrapper method.
+            // NOTE: i,s and k cannot be object and so cannot have non-wrapper method.
             Checker::assertWrapper($names[1]);
 
             $expression->insertWrapper();
 
             return Statement::loopName($loopDepth, $names[0]).')->'.$names[1];
         }
-        // @note i,s and k cannot be array and so cannot have element.
+        // NOTE: i,s and k cannot be array and so cannot have element.
         throw new SyntaxError('[030] Unexpected "'.implode('', $tokens).'"');
     }
     private static function parseH($tokens, $names, $loopDepth) {

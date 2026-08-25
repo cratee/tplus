@@ -3,7 +3,7 @@
 class Tplus {
     
     const SCRIPT_SIZE_PAD = 9;
-    const VERSION = '1.2.2-p3';
+    const VERSION = '1.2.3';
 
     private $data=[];
     private $phpReport;

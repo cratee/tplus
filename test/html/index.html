@@ -8,7 +8,7 @@
 	td { border-radius:3px; font:normal 15px tahoma, verdana, sans-serif; border:0px ; padding:5px 2px ; line-height:22px}
 	td ul {margin:0px; padding:20px;}
 
-	tr td:nth-child(1) { text-align:right;padding-right:5px}
+	tr td:nth-child(1) { text-align:right;padding-right:5px;white-space: nowrap;}
 	tr td:nth-child(2) { white-space: pre-wrap;}
 	tr td:nth-child(n+2):nth-child(-n+4) { background:#f2f3f7; padding:3px 10px; width: 30%;}
 
@@ -17,7 +17,7 @@
 		background: #49c; /* E_WARNING에 쓰인 그 매력적인 블루 */
 		color: #def;
 		padding: 3px 6px;
-		width:45px;
+		min-width:45px;
 		text-align: left;
 		border-radius: 3px;
 		display: inline-block;
@@ -780,6 +780,52 @@ Kitty, 25, running
 		odd --Last<br/>
 	</td>
 </tr>
+
+
+<tr>
+	<td><span>CSS Patch (v1.0.4)</span></td>
+	<td>
+(outside of if block)
+[\: aaa]
+[\:aaa]
+[\\:aaa]
+	</td>
+	<td>
+(outside of if block)<br/>
+[: aaa]<br/>
+[:aaa]<br/>
+[\:aaa]
+	</td>
+	<td>
+(outside of if block)<br/>
+[\: aaa]<br/>
+[\:aaa]<br/>
+[\:aaa]
+	</td>
+</tr>
+
+
+<tr>
+	<td><span>CSS Patch (v1.2.3)</span></td>
+	<td>
+[\? true]
+	[\:aaa]
+[\: false]
+	123
+[\/]
+	</td>
+	<td>
+[? true]
+	[:aaa]
+[: false]
+	123
+[/]
+	</td>
+	<td>
+[\:aaa]
+	</td>
+</tr>
+
 </table>
 
 
