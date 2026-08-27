@@ -50,11 +50,9 @@ class Scripter {
             self::$userCode = self::getHtml($htmlPath);            
             self::saveScript($scriptPath, $sizePad, $header, self::parse()); 
 
-        } catch(SyntaxError $e) {
+        } catch(\Throwable $e) {
             self::reportError($e, $htmlPath, self::$currentLine);
 
-        } catch(FatalError $e) {
-            self::reportError($e, $htmlPath, self::$currentLine);
         }
     }
 
@@ -64,15 +62,15 @@ class Scripter {
 
         if (!is_dir($targetDir)) {
             if (!mkdir($targetDir, 0775, true)) {
-                throw new FatalError("[036] Cannot create directory {$targetDir} Check write-permission.", 1);
+                throw new FileSystemError("[036] Cannot create directory {$targetDir} Check write-permission.", 1);
             }
         }
         if (!is_readable($targetDir)) {
-            throw new FatalError("[052] Script root is not readable. Check web-server read-permission for: {$targetDir}", 1);
+            throw new FileSystemError("[052] Script root is not readable. Check web-server read-permission for: {$targetDir}", 1);
         }
         if (DIRECTORY_SEPARATOR === '/' and !is_writable($targetDir)) {
             // NOTE: is_writable() might not work on some OS(old version Windows?).
-            throw new FatalError("[053] Script root is not writable. Check web-server write-permission: {$targetDir}", 1);
+            throw new FileSystemError("[053] Script root is not writable. Check web-server write-permission: {$targetDir}", 1);
         }
 
         $headerPostfix = ' */ ?>' . "\n";
@@ -82,7 +80,7 @@ class Scripter {
         $script        = $header . $script;
 
         if (!file_put_contents($scriptPath, $script, LOCK_EX)) {
-            throw new FatalError("[049] Failed to write file {$scriptPath} Check write-permission.", 1);
+            throw new FileSystemError("[049] Failed to write file {$scriptPath} Check write-permission.", 1);
         }
         
         @chmod($scriptPath, 0664);
@@ -270,6 +268,8 @@ class Scripter {
 
 class SyntaxError extends \Error {}
 class FatalError extends \Error {}
+class ResourceNotFound extends \Error {}
+class FileSystemError extends \Error {}
 
 class Stack {
     protected $items = [];
@@ -922,7 +922,7 @@ class Checker {
     public static function assertWrapper($name) {
         self::assertFunc($name);
         if (!self::isDefinedWrapper($name)) {
-            throw new FatalError("[041] Wrapper method `{$name}()` is not defined in class `".Scripter::$wrapper."`.");
+            throw new ResourceNotFound("[041] Wrapper method `{$name}()` is not defined in class `".Scripter::$wrapper."`.");
         }
     }
     public static function isNextDot() { //Chain not ends.
@@ -1013,7 +1013,7 @@ class NameDotChain {
             return $script . ')->' . $method;
         }
         if ($mustBeWrapper) {
-            throw new FatalError("[023] Wrapper method `{$method}()` is not defined in class `".Scripter::$wrapper."`.");
+            throw new ResourceNotFound("[023] Wrapper method `{$method}()` is not defined in class `".Scripter::$wrapper."`.");
         }
         return $script . '->' . $method;
     }
@@ -1064,7 +1064,7 @@ class LoopMember {
         }
         $helperMethod = strtolower($names[1]);
         if (!in_array($helperMethod, Scripter::loopHelperMethods())) {
-            throw new FatalError('[031] Loop-helper method `'.$helperMethod.'()` is not defined.');
+            throw new ResourceNotFound('[031] Loop-helper method `'.$helperMethod.'()` is not defined.');
         }
         ['a'=>$a, 'i'=>$i, 's'=>$s, 'k'=>$k, 'v'=>$v] = Statement::loopNames($loopDepth);
         
@@ -1192,7 +1192,7 @@ class DefaultChain {
                 $script = $path.'\\'.$constName;    // namespace constant
             }
             if (!defined($script)) {
-                throw new FatalError("[040] Constant `{$script}` is not defined.");    
+                throw new ResourceNotFound("[040] Constant `{$script}` is not defined.");    
             }
 
             foreach ($remainingNames as $name) {
@@ -1211,7 +1211,7 @@ class DefaultChain {
             if (class_exists($path)) {
                 if (!method_exists($path, $method)) {
                     Statement::$rawTag.='(';
-                    throw new FatalError("[035] Static method `{$path}::{$method}()` is not defined.");
+                    throw new ResourceNotFound("[035] Static method `{$path}::{$method}()` is not defined.");
                 }
                 return ['type'=>'staticMethod', 'script'=>$path.'::'.$method, 'method'=>null];
             }
