@@ -40,14 +40,20 @@ class Scripter {
     public static $wrapper;
     public static $loopHelper;
     public static $userCode;
-
+    public static $tfzOpened = false;
+    
     public static function script($htmlPath, $scriptPath, $sizePad, $header, $config) {
     
         self::$wrapper = '\\'.(empty($config['Wrapper']) ? 'TplWrapper' : $config['Wrapper']);
         self::$loopHelper = '\\'.(empty($config['LoopHelper']) ? 'TplLoopHelper' : $config['LoopHelper']);
 
         try {
-            self::$userCode = self::getHtml($htmlPath);            
+            self::$userCode = self::getHtml($htmlPath);
+    
+            if ($foundScriptTag = self::findScriptTag()) {
+                throw new SyntaxError('[048] PHP tag not allowed. '.$foundScriptTag);
+            };
+
             self::saveScript($scriptPath, $sizePad, $header, self::parse()); 
 
         } catch(\Throwable $e) {
@@ -114,9 +120,9 @@ class Scripter {
         exit;
     }
 
-    public static function decreaseUserCode($parsedUserCode) {
-        self::$userCode = substr(self::$userCode, strlen($parsedUserCode));
-        self::$currentLine += substr_count($parsedUserCode,"\n");
+    public static function consumeUserCode($consumedText) {
+        self::$userCode = substr(self::$userCode, strlen($consumedText));
+        self::$currentLine += substr_count($consumedText,"\n");
     }
 
     public static function wrapperMethods() {
@@ -142,31 +148,132 @@ class Scripter {
         return $methods[$class];
     }
 
-    
-    private static function parse() {
-        $foundScriptTag = self::findScriptTag();
-        if ($foundScriptTag) {
-            throw new SyntaxError('[048] PHP tag not allowed. '.$foundScriptTag);
-        };
-
-        $resultScript='';
-        while (self::$userCode) {
-            /*$pattern =
-            '~              // $parsedUserCode ($matches[0])
-                (.*?)       // $betweenTags
+    private static function findTfzTagInFirstLine() {
+        preg_match('/^\s*\\\\*\[\[\[[ \t]*(?:\n|$)/s', self::$userCode, $matches);
+        return $matches[0] ?? false;
+    }
+    private static function findTagAndCommandOutsideTfz() {
+        $pattern = 
+        '~
+            (.*?)
+            (?:
+                (
+                    \n[ \t]*
+                    \\\\*
+                    \[\[\[  
+                    [ \t]*(?:\n|$)
+                ) 
+            |                       
                 (<!--\s*)?
                 (\[)
                 (\\\\*)
                 ([=@?:/*])
-            ~xs';*/
-            [$parsedUserCode, $betweenTags, $htmlLeftCmnt, $leftTag, $escape, $command]
-                = self::findLeftTagAndCommand(self::$userCode);
+            )
+        ~xs';
+
+        if (preg_match($pattern, self::$userCode, $matches)) {
+            return [
+                $matches[0],            # 0: $consumedText
+                $matches[1],            # 1: $textBeforeTplusCode
+                $matches[3] ?? '',      # 2: $htmlLeftCmnt
+                $matches[4] ?? '',      # 3: $leftTag
+                '',                     # 4: $leftNl
+                $matches[5] ?? '',      # 5: $escape
+                $matches[6] ?? '',      # 6: $command
+                $matches[2] ?? ''       # 7: $tfzMatch
+            ];
+        }
+
+        return [self::$userCode, self::$userCode, '', '', '', '', '', ''];
+    }
+
+    private static function findTagAndCommandInsideTfz() {
+        $pattern = 
+        '~
+            (.*?)
+            (?:
+                (<!--\s*)?
+                (\[)
+                (\\\\*)
+                ([=@?:/*])
+            |
+                (\n[ \t]*)
+                (\\\\*)
+                ([=@?:/*])
+            |
+                (
+                    \n[ \t]*
+                    \\\\*
+                    \]\]\]
+                    [ \t]*(?:\n|$)
+                )
+            )
+        ~xs';
+
+        if (preg_match($pattern, self::$userCode, $matches)) {
+            
+            $escape = !empty($matches[4]) ? $matches[4] : ($matches[7] ?? '');
+            $command = !empty($matches[5]) ? $matches[5] : ($matches[8] ?? '');
+
+            return [
+                $matches[0],            # 0: $consumedText
+                $matches[1],            # 1: $textBeforeTplusCode
+                $matches[2] ?? '',      # 2: $htmlLeftCmnt
+                $matches[3] ?? '',      # 3: $leftTag
+                $matches[6] ?? '',      # 4: $leftNl
+                $escape,                # 5: $escape
+                $command,               # 6: $command
+                $matches[9] ?? ''       # 7: $tfzCloseTag
+            ];
+        }
+
+        return [self::$userCode, self::$userCode, '', '', '', '', '', ''];
+    }
+
+    private static function parseTfzTag($tfzTag, $opened, $isFirstLine = false) {
+        if (($pos = strpos($tfzTag, '\\')) !== false) {
+            return substr_replace($tfzTag, '', $pos, 1);
+        } else {
+            self::$tfzOpened = $opened;
+            return $isFirstLine ? '' : "\n";
+        }
+    }
+    private static function parse() {
+
+        $resultScript='';
         
-            $resultScript .= $betweenTags;
+        
+        if ($tfzOpenTag = self::findTfzTagInFirstLine()) {
+            $resultScript .= self::parseTfzTag($tfzOpenTag, true, true);
+            self::consumeUserCode($tfzOpenTag);
+        }
 
-            self::decreaseUserCode($parsedUserCode);
+        while (self::$userCode) {
 
-            if (!$leftTag) { 
+             $tfzOpenTag = $tfzCloseTag = '';
+
+            if (self::$tfzOpened) {
+                [$consumedText, $textBeforeTplusCode, $htmlLeftCmnt, $leftTag, $leftNl, $escape, $command, $tfzCloseTag]
+                    = self::findTagAndCommandInsideTfz();
+            } else {
+                [$consumedText, $textBeforeTplusCode, $htmlLeftCmnt, $leftTag, $leftNl, $escape, $command, $tfzOpenTag ]
+                    = self::findTagAndCommandOutsideTfz();
+            }
+
+            $resultScript .= $textBeforeTplusCode;
+            self::consumeUserCode($consumedText);
+
+            if (!empty($tfzOpenTag)) {
+                $resultScript .= self::parseTfzTag($tfzOpenTag, true);
+                continue;
+            }
+
+            if (!empty($tfzCloseTag)) {
+                $resultScript .= self::parseTfzTag($tfzCloseTag, false);
+                continue;
+            }
+
+            if (empty($leftTag) and empty($leftNl)) { 
                 break;
             }
 
@@ -175,7 +282,7 @@ class Scripter {
 
             } else if ('*' === $command) {
                 $comment = self::getComment(self::$userCode);
-                self::decreaseUserCode($comment);
+                self::consumeUserCode($comment);
 
             } else if (':' === $command && preg_match('~^[a-zA-Z_\-]~', self::$userCode)) {
                 // NOTE: Avoid parsing CSS selectors (like Tailwind) & maintain backward compatibility
@@ -184,7 +291,7 @@ class Scripter {
             } else {
                 $statement = Statement::script($command);
                 if (false === $statement) {
-                    // [:][/] out of [@] or [?] blocks.
+                    // [:][/] outside of @ ? block.
                     $resultScript .= $htmlLeftCmnt . $leftTag . /*$escape.*/$command;
                 } else {
                     $resultScript .= $statement;
@@ -234,6 +341,29 @@ class Scripter {
         }
         return '';
     }
+
+    private static function findLeftTagOutsideTFZ() {
+        $pattern =
+        '~
+            (.*?)
+            (<!--\s*)?
+            (\[)
+            (\\\\*)
+            ([=@?:/*])
+        ~xs';
+
+        if (preg_match($pattern, $userCode, $matches)) {
+            return $matches; 
+        }
+
+        return [$userCode, $userCode, '', '', '', ''];
+
+    }
+
+    private static function findLeftTagInsideTFZ() {
+        
+    }
+
 
     private static function findLeftTagAndCommand($userCode) {
         $pattern =
@@ -359,7 +489,7 @@ class Statement {
     }
 
     private static function newLine() {
-        return in_array(substr(Scripter::$userCode, 0, 1), ["\n", "\r"])
+        return (substr(Scripter::$userCode, 0, 1) === "\n")
             ? ""
             : "\n";
     }
@@ -391,7 +521,7 @@ class Statement {
             throw new SyntaxError('[045] Tag must be closed with `]`');
         }
     
-        Scripter::decreaseUserCode($matches[0]);
+        Scripter::consumeUserCode($matches[0]);
     }
 
     private static function parseLoop() {
@@ -722,7 +852,7 @@ class Expression {
         foreach (Token::GROUPS as $tokenGroup => $tokenNames) {
             foreach ($tokenNames as $tokenName => $pattern) {
                 if (preg_match('#^('.$pattern.')#s', Scripter::$userCode, $matches)) {
-                    Scripter::decreaseUserCode($matches[0]);
+                    Scripter::consumeUserCode($matches[0]);
                     return ['group' => $tokenGroup, 'name' => $tokenName, 'value' => $matches[0]];
                 }
             }
