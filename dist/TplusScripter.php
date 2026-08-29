@@ -39,8 +39,7 @@ class Scripter {
     public static $currentLine = 1;
     public static $wrapper;
     public static $loopHelper;
-    public static $userCode;
-    public static $tfzOpened = false;
+    public static $userCode;    
     
     public static function script($htmlPath, $scriptPath, $sizePad, $header, $config) {
     
@@ -148,103 +147,13 @@ class Scripter {
         return $methods[$class];
     }
 
-    private static function findTfzTagInFirstLine() {
-        preg_match('/^\s*\\\\*\[\[\[[ \t]*(?:\n|$)/s', self::$userCode, $matches);
-        return $matches[0] ?? false;
-    }
-    private static function findTagAndCommandOutsideTfz() {
-        $pattern = 
-        '~
-            (.*?)
-            (?:
-                (
-                    \n[ \t]*
-                    \\\\*
-                    \[\[\[  
-                    [ \t]*(?:\n|$)
-                ) 
-            |                       
-                (<!--\s*)?
-                (\[)
-                (\\\\*)
-                ([=@?:/*])
-            )
-        ~xs';
-
-        if (preg_match($pattern, self::$userCode, $matches)) {
-            return [
-                $matches[0],            # 0: $consumedText
-                $matches[1],            # 1: $textBeforeTplusCode
-                $matches[3] ?? '',      # 2: $htmlLeftCmnt
-                $matches[4] ?? '',      # 3: $leftTag
-                '',                     # 4: $leftNl
-                $matches[5] ?? '',      # 5: $escape
-                $matches[6] ?? '',      # 6: $command
-                $matches[2] ?? ''       # 7: $tfzMatch
-            ];
-        }
-
-        return [self::$userCode, self::$userCode, '', '', '', '', '', ''];
-    }
-
-    private static function findTagAndCommandInsideTfz() {
-        $pattern = 
-        '~
-            (.*?)
-            (?:
-                (<!--\s*)?
-                (\[)
-                (\\\\*)
-                ([=@?:/*])
-            |
-                (\n[ \t]*)
-                (\\\\*)
-                ([=@?:/*])
-            |
-                (
-                    \n[ \t]*
-                    \\\\*
-                    \]\]\]
-                    [ \t]*(?:\n|$)
-                )
-            )
-        ~xs';
-
-        if (preg_match($pattern, self::$userCode, $matches)) {
-            
-            $escape = !empty($matches[4]) ? $matches[4] : ($matches[7] ?? '');
-            $command = !empty($matches[5]) ? $matches[5] : ($matches[8] ?? '');
-
-            return [
-                $matches[0],            # 0: $consumedText
-                $matches[1],            # 1: $textBeforeTplusCode
-                $matches[2] ?? '',      # 2: $htmlLeftCmnt
-                $matches[3] ?? '',      # 3: $leftTag
-                $matches[6] ?? '',      # 4: $leftNl
-                $escape,                # 5: $escape
-                $command,               # 6: $command
-                $matches[9] ?? ''       # 7: $tfzCloseTag
-            ];
-        }
-
-        return [self::$userCode, self::$userCode, '', '', '', '', '', ''];
-    }
-
-    private static function parseTfzTag($tfzTag, $opened, $isFirstLine = false) {
-        if (($pos = strpos($tfzTag, '\\')) !== false) {
-            return substr_replace($tfzTag, '', $pos, 1);
-        } else {
-            self::$tfzOpened = $opened;
-            return $isFirstLine ? '' : "\n";
-        }
-    }
     private static function parse() {
 
         $resultScript='';
         
         
-        if ($tfzOpenTag = self::findTfzTagInFirstLine()) {
-            $resultScript .= self::parseTfzTag($tfzOpenTag, true, true);
+        if ($tfzOpenTag = Tfz::findFirstLine()) {
+            $resultScript .= Tfz::parseTag($tfzOpenTag, true, true);
             self::consumeUserCode($tfzOpenTag);
         }
 
@@ -252,24 +161,24 @@ class Scripter {
 
              $tfzOpenTag = $tfzCloseTag = '';
 
-            if (self::$tfzOpened) {
+            if (Tfz::$opened) {
                 [$consumedText, $textBeforeTplusCode, $htmlLeftCmnt, $leftTag, $leftNl, $escape, $command, $tfzCloseTag]
-                    = self::findTagAndCommandInsideTfz();
+                    = Tfz::findInside();
             } else {
                 [$consumedText, $textBeforeTplusCode, $htmlLeftCmnt, $leftTag, $leftNl, $escape, $command, $tfzOpenTag ]
-                    = self::findTagAndCommandOutsideTfz();
+                    = Tfz::findOutside();
             }
 
             $resultScript .= $textBeforeTplusCode;
             self::consumeUserCode($consumedText);
 
             if (!empty($tfzOpenTag)) {
-                $resultScript .= self::parseTfzTag($tfzOpenTag, true);
+                $resultScript .= Tfz::parseTag($tfzOpenTag, true);
                 continue;
             }
 
             if (!empty($tfzCloseTag)) {
-                $resultScript .= self::parseTfzTag($tfzCloseTag, false);
+                $resultScript .= Tfz::parseTag($tfzCloseTag, false);
                 continue;
             }
 
@@ -342,46 +251,6 @@ class Scripter {
         return '';
     }
 
-    private static function findLeftTagOutsideTFZ() {
-        $pattern =
-        '~
-            (.*?)
-            (<!--\s*)?
-            (\[)
-            (\\\\*)
-            ([=@?:/*])
-        ~xs';
-
-        if (preg_match($pattern, $userCode, $matches)) {
-            return $matches; 
-        }
-
-        return [$userCode, $userCode, '', '', '', ''];
-
-    }
-
-    private static function findLeftTagInsideTFZ() {
-        
-    }
-
-
-    private static function findLeftTagAndCommand($userCode) {
-        $pattern =
-        '~
-            (.*?)
-            (<!--\s*)?
-            (\[)
-            (\\\\*)
-            ([=@?:/*])
-        ~xs';
-
-        if (preg_match($pattern, $userCode, $matches)) {
-            return $matches; 
-        }
-
-        return [$userCode, $userCode, '', '', '', ''];
-    }
-
     private static function getComment($userCode) {
         $pattern =
         '~  
@@ -395,7 +264,101 @@ class Scripter {
             : $userCode;
     }
 }
+class Tfz {
 
+    public static $opened = false;
+    
+    public static function parseTag($tfzTag, $opened, $isFirstLine = false) {
+        if (($pos = strpos($tfzTag, '\\')) !== false) {
+            return substr_replace($tfzTag, '', $pos, 1);
+        } else {
+            self::$opened = $opened;
+            return $isFirstLine ? '' : "\n";
+        }
+    }
+
+    public static function findFirstLine() {
+        preg_match('/^\s*\\\\*\[\[\[[ \t]*(?:\n|$)/s', Scripter::$userCode, $matches);
+        return $matches[0] ?? false;
+    }
+    public static function findOutside() {
+        $pattern = 
+        '~
+            (.*?)
+            (?:
+                (
+                    \n[ \t]*
+                    \\\\*
+                    \[\[\[  
+                    [ \t]*(?:\n|$)
+                ) 
+            |                       
+                (<!--\s*)?
+                (\[)
+                (\\\\*)
+                ([=@?:/*])
+            )
+        ~xs';
+
+        if (preg_match($pattern, Scripter::$userCode, $matches)) {
+            return [
+                $matches[0],            # 0: $consumedText
+                $matches[1],            # 1: $textBeforeTplusCode
+                $matches[3] ?? '',      # 2: $htmlLeftCmnt
+                $matches[4] ?? '',      # 3: $leftTag
+                '',                     # 4: $leftNl
+                $matches[5] ?? '',      # 5: $escape
+                $matches[6] ?? '',      # 6: $command
+                $matches[2] ?? ''       # 7: $tfzMatch
+            ];
+        }
+
+        return [Scripter::$userCode, Scripter::$userCode, '', '', '', '', '', ''];
+    }
+
+    public static function findInside() {
+        $pattern = 
+        '~
+            (.*?)
+            (?:
+                (<!--\s*)?
+                (\[)
+                (\\\\*)
+                ([=@?:/*])
+            |
+                (\n[ \t]*)
+                (\\\\*)
+                ([=@?:/*])
+            |
+                (
+                    \n[ \t]*
+                    \\\\*
+                    \]\]\]
+                    [ \t]*(?:\n|$)
+                )
+            )
+        ~xs';
+
+        if (preg_match($pattern, Scripter::$userCode, $matches)) {
+            
+            $escape = !empty($matches[4]) ? $matches[4] : ($matches[7] ?? '');
+            $command = !empty($matches[5]) ? $matches[5] : ($matches[8] ?? '');
+
+            return [
+                $matches[0],            # 0: $consumedText
+                $matches[1],            # 1: $textBeforeTplusCode
+                $matches[2] ?? '',      # 2: $htmlLeftCmnt
+                $matches[3] ?? '',      # 3: $leftTag
+                $matches[6] ?? '',      # 4: $leftNl
+                $escape,                # 5: $escape
+                $command,               # 6: $command
+                $matches[9] ?? ''       # 7: $tfzCloseTag
+            ];
+        }
+
+        return [Scripter::$userCode, Scripter::$userCode, '', '', '', '', '', ''];
+    }
+}
 class SyntaxError extends \Error {}
 class FatalError extends \Error {}
 class ResourceNotFound extends \Error {}
