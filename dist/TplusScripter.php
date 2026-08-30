@@ -48,11 +48,6 @@ class Scripter {
 
         try {
             self::$userCode = self::getHtml($htmlPath);
-    
-            if ($foundScriptTag = self::findScriptTag()) {
-                throw new SyntaxError('[048] PHP tag not allowed. '.$foundScriptTag);
-            };
-
             self::saveScript($scriptPath, $sizePad, $header, self::parse()); 
 
         } catch(\Throwable $e) {
@@ -99,7 +94,7 @@ class Scripter {
         if (ini_get('log_errors')) {
             $logMessage = $message;
             if ($userCodeContained) {
-                $logMessage .= " in {$htmlPath} on line {$currentLine}: ".Statement::$rawTag;
+                $logMessage .= " in {$htmlPath} on line {$currentLine}: ".Statement::$rawCode;
             }
             error_log("{$title}: {$logMessage}");
         }
@@ -112,7 +107,7 @@ class Scripter {
                 'escape' => true,
                 'file'   => $htmlPath,
                 'line'   => $currentLine,
-                'code'   => Statement::$rawTag                
+                'code'   => Statement::$rawCode                
             ]);
             if (ob_get_level()) ob_end_flush();
         }
@@ -151,7 +146,6 @@ class Scripter {
 
         $resultScript='';
         
-        
         if ($tfzOpenTag = Tfz::findFirstLine()) {
             $resultScript .= Tfz::parseTag($tfzOpenTag, true, true);
             self::consumeUserCode($tfzOpenTag);
@@ -172,12 +166,12 @@ class Scripter {
             $resultScript .= $textBeforeTplusCode;
             self::consumeUserCode($consumedText);
 
-            if (!empty($tfzOpenTag)) {
+            if ($tfzOpenTag) {
                 $resultScript .= Tfz::parseTag($tfzOpenTag, true);
                 continue;
             }
 
-            if (!empty($tfzCloseTag)) {
+            if ($tfzCloseTag) {
                 $resultScript .= Tfz::parseTag($tfzCloseTag, false);
                 continue;
             }
@@ -190,7 +184,7 @@ class Scripter {
                 $resultScript .= $htmlLeftCmnt.$leftTag.substr($escape, 1).$command;
 
             } else if ('*' === $command) {
-                $comment = self::getComment(self::$userCode);
+                $comment = self::getTplusComment();
                 self::consumeUserCode($comment);
 
             } else if (':' === $command && preg_match('~^[a-zA-Z_\-]~', self::$userCode)) {
@@ -198,26 +192,17 @@ class Scripter {
                 $resultScript .= $htmlLeftCmnt . $leftTag . $command;
 
             } else {
-                $statement = Statement::script($command);
+                $statement = Statement::script($leftTag, $command);
                 if (false === $statement) {
                     // [:][/] outside of @ ? block.
-                    $resultScript .= $htmlLeftCmnt . $leftTag . /*$escape.*/$command;
+                    $resultScript .= $htmlLeftCmnt . $leftTag . $leftNl . /*$escape.*/$command;
                 } else {
                     $resultScript .= $statement;
                 }
             }            
         }
 
-        if ($commandStack = Statement::commandStack()) {
-            while ($command = $commandStack->pop()) {
-                if (!$command or in_array($command, ['@', '?'])) {
-                    break;
-                }
-            }
-            if ($command) {
-                throw new SyntaxError("[044] Tag `[{$command}...]` must be closed with [/]");
-            }
-        }
+        Statement::disallowUnclosedBlock();
         return $resultScript;
     }
 
@@ -225,6 +210,8 @@ class Scripter {
 
         $html = file_get_contents($htmlPath);
         
+        self::disallowPhpTag($html);
+
         // remove UTF-8 BOM
         $html = str_replace("\xEF\xBB\xBF", '', $html);
 
@@ -232,26 +219,26 @@ class Scripter {
         return str_replace(["\r\n", "\r"], "\n", $html);
     }
 
-    private static function findScriptTag() {
-        $scriptTagPattern = ini_get('short_open_tag') ? '~(<\?)~' : '~(<\?(php\s|=))~i';
+    private static function disallowPhpTag($html) {
+        $phpTagPattern = ini_get('short_open_tag') ? '~(<\?)~' : '~(<\?(php\b|=))~i';
         // NOTE: Since php 7.0, <% and <script language=php> are removed.
 
         $split = preg_split(
-            $scriptTagPattern,
-            self::$userCode,
+            $phpTagPattern,
+            $html,
             2, 
             PREG_SPLIT_DELIM_CAPTURE
         );
 
         if (1 < count($split)) {
             self::$currentLine += substr_count($split[0], "\n");
-            $foundScriptTag = $split[1];
-            return $foundScriptTag;
+            $phpTag = $split[1];
+
+            throw new SyntaxError('[048] PHP tag not allowed. '.$phpTag);
         }
-        return '';
     }
 
-    private static function getComment($userCode) {
+    private static function getTplusComment() {
         $pattern =
         '~  
             ^.*?
@@ -259,9 +246,9 @@ class Scripter {
             (?:\s*-->)?
         ~xs';
         
-        return preg_match($pattern, $userCode, $matches)
+        return preg_match($pattern, self::$userCode, $matches)
             ? $matches[0]
-            : $userCode;
+            : self::$userCode;
     }
 }
 class Tfz {
@@ -309,7 +296,7 @@ class Tfz {
                 '',                     # 4: $leftNl
                 $matches[5] ?? '',      # 5: $escape
                 $matches[6] ?? '',      # 6: $command
-                $matches[2] ?? ''       # 7: $tfzMatch
+                $matches[2] ?? ''       # 7: $tfzOpenTag
             ];
         }
 
@@ -328,7 +315,7 @@ class Tfz {
             |
                 (\n[ \t]*)
                 (\\\\*)
-                ([=@?:/*])
+                ([=@?:/])
             |
                 (
                     \n[ \t]*
@@ -401,26 +388,36 @@ class Statement {
      *      (else if) not needed for syntax check
      */
     private static $commandStack;
-    public static $rawTag;
+    public static $rawCode;
+    public static $leftTag;
 
-    public static function commandStack() {
-        return self::$commandStack;
+    public static function disallowUnclosedBlock() {
+        if ($commandStack = self::commandStack) {
+            while ($command = $commandStack->pop()) {
+                if (!$command or in_array($command, ['@', '?'])) {
+                    break;
+                }
+            }
+            if ($command) {
+                throw new SyntaxError("[044] Tag `[{$command}...]` must be closed with [/]");
+            }
+        }
     }
-
-    public static function script($command) {
+    public static function script($leftTag, $command) {
     
         if (!isset(self::$commandStack)) {
             self::$commandStack = new Stack;
         }
 
-        self::$rawTag = "[$command";
+        self::$leftTag = $leftTag;
+        self::$rawCode = $leftTag . $command;
 
         if ($command === '=') {
             return self::parseEcho();
         }
         switch($command) {
             case '@': $script = self::parseLoop();      break;
-            case '?': $script = self::parseIf();    break;
+            case '?': $script = self::parseIf();        break;
             case '/': 
                 if (!self::$commandStack->peek()) {
                     return false;
@@ -460,9 +457,9 @@ class Statement {
     private static function getComment() {
         $meta = [
             'line' => Scripter::$currentLine,
-            'code' => str_replace('*/', '*\/', Statement::$rawTag).']'
+            'code' => str_replace('*/', '*\/', self::$rawCode).']'
         ];
-        self::$rawTag = '';
+        self::$rawCode = '';
         return '/*'.json_encode($meta, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE).'*/';
     }
 
@@ -489,7 +486,7 @@ class Statement {
 
     private static function parseLoop() {
         if (!self::expressionExists()) {
-            self::$rawTag .= ' ]';
+            self::$rawCode .= ' ]';
             throw new SyntaxError('[048] Loop command `@` requires an expression.');
         }
 
@@ -507,7 +504,7 @@ class Statement {
 
     private static function parseIf() {
         if (!self::expressionExists()) {
-            self::$rawTag .= ' ]';
+            self::$rawCode .= ' ]';
             throw new SyntaxError('[047] Condition command `?` requires an expression.');
         }
         self::$commandStack->push('?');
@@ -703,8 +700,13 @@ class CxStop {
         Cxt::TRN_COLON  => ['check' => [',', ')', ']', '}']],
     ];
     public static function isValid($parentCxt, $stopCode, $expression) {
-        if (!$parentCxt and $stopCode === ']') { // end tag
-            return true;
+        if (!$parentCxt) {
+           if (Statement::$leftTag === '[' && $stopCode === ']') {
+                return true;
+            }
+            if (Statement::$leftTag === '' && $stopCode === "\n") {
+                return true;
+            }
         }
 
         $map = self::$map[$parentCxt] ?? null;
@@ -718,7 +720,7 @@ class CxStop {
             return $expression->preventEmptyExpression($stopCode);
         }
 
-        Statement::$rawTag .= $stopCode;
+        Statement::$rawCode .= $stopCode;
         throw new SyntaxError("[014] Unexpected token `{$stopCode}`");
     }
 }
@@ -761,7 +763,7 @@ class Expression {
             $afterCx = false;
             $currToken = $this->nextToken();
 
-            Statement::$rawTag .= $currToken['value'];
+            Statement::$rawCode .= $currToken['value'];
 
             if ($currToken['group'] === Token::SPACE) {
                 continue;
@@ -789,15 +791,26 @@ class Expression {
     }
 
     private function isFinished($parentCxt, $afterCx) {
-        if (! Scripter::$userCode ) {
-            throw new SyntaxError('[015] HTML file ends without Tplus closing tag `]`');
+
+        if (! Scripter::$userCode) {
+            if (Statement::$leftTag === '') {
+                return CxStop::isValid($parentCxt, '', $this);
+            }
+            
+            throw new SyntaxError("[015] HTML file ends without Tplus closing tag `]`");
         }
-        
+
         $stopCode = substr(Scripter::$userCode, 0, 1);
 
-        if (!in_array($stopCode, [')', '}', ']', ':', ','])) {
+        $stopCodes = [')', '}', ']', ':', ','];
+        if (Statement::$leftTag != '[') {
+            $stopCodes[] = "\n";
+        }
+
+        if (!in_array($stopCode, $stopCodes, true)) {
             return false;
         }
+
 
         if ($afterCx) {
             // Ternary expressions (a ? b : c) require two-step termination:
@@ -1268,7 +1281,7 @@ class DefaultChain {
         // 1. global function
         if ($method and empty($names)) { 
             if (!function_exists($method) and !in_array($method, ['isset','empty'])) {
-                Statement::$rawTag.='(';
+                Statement::$rawCode.='(';
                 throw new SyntaxError("[034] Function `{$method}()` is not defined.");
             }
             return ['type' => 'func', 'script'=>$method, 'method'=>null];
@@ -1303,7 +1316,7 @@ class DefaultChain {
             $path = '\\'.implode('\\', $names);
             if (class_exists($path)) {
                 if (!method_exists($path, $method)) {
-                    Statement::$rawTag.='(';
+                    Statement::$rawCode.='(';
                     throw new ResourceNotFound("[035] Static method `{$path}::{$method}()` is not defined.");
                 }
                 return ['type'=>'staticMethod', 'script'=>$path.'::'.$method, 'method'=>null];
