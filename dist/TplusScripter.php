@@ -36,7 +36,7 @@ namespace Tplus;
  */
 class Scripter {
 
-    public static $currentLine = 1;
+    public static $currentLine = 0;
     public static $wrapper;
     public static $loopHelper;
     public static $userCode;    
@@ -47,7 +47,7 @@ class Scripter {
         self::$loopHelper = '\\'.(empty($config['LoopHelper']) ? 'TplLoopHelper' : $config['LoopHelper']);
 
         try {
-            self::$userCode = self::getHtml($htmlPath);
+            self::$userCode = "\n" . self::getHtml($htmlPath);
             self::saveScript($scriptPath, $sizePad, $header, self::parse()); 
 
         } catch(\Throwable $e) {
@@ -145,26 +145,6 @@ class Scripter {
     private static function parse() {
 
         $resultScript='';
-        
-        if ($tfzOpenTag = Tfz::findTagInFirstLine()) {
-            $resultScript .= Tfz::parseTag($tfzOpenTag, true);
-            self::consumeUserCode($tfzOpenTag);  // NOTE: Consumes tag line with trailing \n
-
-            if (Tfz::$opened) {
-                [$consumedText, $escape, $command] = Tfz::findSecondLine();
-                if ($consumedText) {
-                    self::consumeUserCode($consumedText);
-                    if ($escape) {
-                        $resultScript .= substr_replace($consumedText, '', strpos($consumedText, '\\'), 1);
-                    } else {
-                        $resultScript .= Statement::script('', $command);
-                    }
-                }    
-            } else if ($tfzOpenTag = Tfz::findTagInSecondLine()) {
-                $resultScript .= Tfz::parseTag($tfzOpenTag, true);
-                self::consumeUserCode($tfzOpenTag);  // NOTE: Preserves tag line with trailing \n
-            }
-        }
 
         while (self::$userCode) {
 
@@ -212,13 +192,14 @@ class Scripter {
                     // [:][/] outside of @ ? block.
                     $resultScript .= $htmlLeftCmnt . $leftTag . $leftNl . /*$escape.*/$command;
                 } else {
-                    $resultScript .= $statement;
+                    $resultScript .= ($leftNl ? "\n" : '') . $statement;
                 }
             }            
         }
 
         Statement::disallowUnclosedBlock();
-        return $resultScript;
+
+        return substr($resultScript, 1);
     }
 
     private static function getHtml($htmlPath) {
@@ -275,23 +256,8 @@ class Tfz {
             return substr_replace($tfzTag, '', $pos, 1);
         } else {
             self::$opened = $opened;
-            return '';
+            return '';          //  return $isFirstLine ? "\n" : '';  
         }
-    }
-
-    public static function findTagInFirstLine() {
-        preg_match('/^[ \t]*\\\\*\[\[\[[ \t]*(?:\n|$)/s', Scripter::$userCode, $matches);
-        return $matches[0] ?? false;
-    }
-    public static function findTagInSecondLine() {
-        preg_match('/^[ \t]*\\\\*\[\[\[[ \t]*(?=\n|$)/s', Scripter::$userCode, $matches);
-        return $matches[0] ?? false;
-    }
-    public static function findSecondLine() {
-        if (preg_match('/^[ \t]*(\\\\*)([=@?])/', Scripter::$userCode, $matches)) {
-            return $matches;
-        }
-        return ['', '', ''];
     }
     public static function findOutside() {
         $pattern = 
