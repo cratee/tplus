@@ -146,9 +146,24 @@ class Scripter {
 
         $resultScript='';
         
-        if ($tfzOpenTag = Tfz::findFirstLine()) {
-            $resultScript .= Tfz::parseTag($tfzOpenTag, true, true);
-            self::consumeUserCode($tfzOpenTag);
+        if ($tfzOpenTag = Tfz::findTagInFirstLine()) {
+            $resultScript .= Tfz::parseTag($tfzOpenTag, true);
+            self::consumeUserCode($tfzOpenTag);  // NOTE: Consumes tag line with trailing \n
+
+            if (Tfz::$opened) {
+                [$consumedText, $escape, $command] = Tfz::findSecondLine();
+                if ($consumedText) {
+                    self::consumeUserCode($consumedText);
+                    if ($escape) {
+                        $resultScript .= substr_replace($consumedText, '', strpos($consumedText, '\\'), 1);
+                    } else {
+                        $resultScript .= Statement::script('', $command);
+                    }
+                }    
+            } else if ($tfzOpenTag = Tfz::findTagInSecondLine()) {
+                $resultScript .= Tfz::parseTag($tfzOpenTag, true);
+                self::consumeUserCode($tfzOpenTag);  // NOTE: Preserves tag line with trailing \n
+            }
         }
 
         while (self::$userCode) {
@@ -255,18 +270,28 @@ class Tfz {
 
     public static $opened = false;
     
-    public static function parseTag($tfzTag, $opened, $isFirstLine = false) {
+    public static function parseTag($tfzTag, $opened) {
         if (($pos = strpos($tfzTag, '\\')) !== false) {
             return substr_replace($tfzTag, '', $pos, 1);
         } else {
             self::$opened = $opened;
-            return $isFirstLine ? '' : "\n";
+            return '';
         }
     }
 
-    public static function findFirstLine() {
-        preg_match('/^\s*\\\\*\[\[\[[ \t]*(?:\n|$)/s', Scripter::$userCode, $matches);
+    public static function findTagInFirstLine() {
+        preg_match('/^[ \t]*\\\\*\[\[\[[ \t]*(?:\n|$)/s', Scripter::$userCode, $matches);
         return $matches[0] ?? false;
+    }
+    public static function findTagInSecondLine() {
+        preg_match('/^[ \t]*\\\\*\[\[\[[ \t]*(?=\n|$)/s', Scripter::$userCode, $matches);
+        return $matches[0] ?? false;
+    }
+    public static function findSecondLine() {
+        if (preg_match('/^[ \t]*(\\\\*)([=@?])/', Scripter::$userCode, $matches)) {
+            return $matches;
+        }
+        return ['', '', ''];
     }
     public static function findOutside() {
         $pattern = 
@@ -277,7 +302,7 @@ class Tfz {
                     \n[ \t]*
                     \\\\*
                     \[\[\[  
-                    [ \t]*(?:\n|$)
+                    [ \t]*(?=\n|$)
                 ) 
             |                       
                 (<!--\s*)?
@@ -321,7 +346,7 @@ class Tfz {
                     \n[ \t]*
                     \\\\*
                     \]\]\]
-                    [ \t]*(?:\n|$)
+                    [ \t]*(?=\n|$)
                 )
             )
         ~xs';
