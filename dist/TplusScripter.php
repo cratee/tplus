@@ -393,7 +393,7 @@ class Statement {
     public  static $rawCode;
 
     public static function disallowUnclosedBlock() {
-        if ($commandStack = self::commandStack) {
+        if ($commandStack = self::$commandStack) {
             while ($command = $commandStack->pop()) {
                 if (!$command or in_array($command, ['@', '?'])) {
                     break;
@@ -518,6 +518,9 @@ class Statement {
 
 
     private static function expressionExists() {
+        if (self::$leftTag === '') {
+            return !preg_match('/^[ \t]*(?:\n|$)/', Scripter::$userCode);
+        }
         return !preg_match('/^\s*\]/', Scripter::$userCode);
     }
 
