@@ -388,8 +388,9 @@ class Statement {
      *      (else if) not needed for syntax check
      */
     private static $commandStack;
-    public static $rawCode;
-    public static $leftTag;
+    private static $rightTag;
+    public  static $leftTag;
+    public  static $rawCode;
 
     public static function disallowUnclosedBlock() {
         if ($commandStack = self::commandStack) {
@@ -409,8 +410,9 @@ class Statement {
             self::$commandStack = new Stack;
         }
 
-        self::$leftTag = $leftTag;
-        self::$rawCode = $leftTag . $command;
+        self::$leftTag  = $leftTag;
+        self::$rightTag = $leftTag==='[' ? ']' : '';
+        self::$rawCode  = $leftTag . $command;
 
         if ($command === '=') {
             return self::parseEcho();
@@ -437,14 +439,14 @@ class Statement {
                 }
         }
 
-        self::parseRightTag();
+        self::consumeRightTag();
 
         return "<?php {$script} ".self::getComment()."?>".self::newLine();
     }
 
     private static function parseEcho() {
         $expression = Expression::script();
-        self::parseRightTag();
+        self::consumeRightTag();
         return "<?={$expression} ".self::getComment()."?>".self::newLine();
     }
 
@@ -457,7 +459,7 @@ class Statement {
     private static function getComment() {
         $meta = [
             'line' => Scripter::$currentLine,
-            'code' => str_replace('*/', '*\/', self::$rawCode).']'
+            'code' => str_replace('*/', '*\/', self::$rawCode).self::$rightTag
         ];
         self::$rawCode = '';
         return '/*'.json_encode($meta, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE).'*/';
@@ -468,7 +470,10 @@ class Statement {
         while(!in_array(self::$commandStack->pop(), ['@', '?']));
         return $script;
     }
-    private static function parseRightTag() {
+    private static function consumeRightTag() {
+        if (self::$leftTag === '') {
+            return;
+        }
         $pattern = 
         // NOTE: pcre modifier 'x' means that white-spaces in pattern are ignored.
         // NOTE: pcre modifier 's' means that dot(.) contains newline.
@@ -486,7 +491,7 @@ class Statement {
 
     private static function parseLoop() {
         if (!self::expressionExists()) {
-            self::$rawCode .= ' ]';
+            self::$rawCode .= self::$rightTag;
             throw new SyntaxError('[048] Loop command `@` requires an expression.');
         }
 
@@ -504,7 +509,7 @@ class Statement {
 
     private static function parseIf() {
         if (!self::expressionExists()) {
-            self::$rawCode .= ' ]';
+            self::$rawCode .= self::$rightTag;
             throw new SyntaxError('[047] Condition command `?` requires an expression.');
         }
         self::$commandStack->push('?');
@@ -700,8 +705,8 @@ class CxStop {
         Cxt::TRN_COLON  => ['check' => [',', ')', ']', '}']],
     ];
     public static function isValid($parentCxt, $stopCode, $expression) {
-        if (!$parentCxt) {
-           if (Statement::$leftTag === '[' && $stopCode === ']') {
+        if ($parentCxt === 0) {
+            if (Statement::$leftTag === '[' && $stopCode === ']') {
                 return true;
             }
             if (Statement::$leftTag === '' && $stopCode === "\n") {
@@ -720,8 +725,21 @@ class CxStop {
             return $expression->preventEmptyExpression($stopCode);
         }
 
-        Statement::$rawCode .= $stopCode;
-        throw new SyntaxError("[014] Unexpected token `{$stopCode}`");
+        if ($stopCode !== "\n") {
+            Statement::$rawCode .= $stopCode;
+        }
+        switch ($stopCode) {
+            case '':
+                $displayToken = 'end of expression';
+                break;
+            case "\n":
+                $displayToken = 'line break';
+                break;
+            default:
+                $displayToken = "token `{$stopCode}`";
+                break;
+        }
+        throw new SyntaxError("[014] Unexpected {$displayToken}");
     }
 }
 
@@ -794,7 +812,7 @@ class Expression {
 
         if (! Scripter::$userCode) {
             if (Statement::$leftTag === '') {
-                return CxStop::isValid($parentCxt, '', $this);
+                return CxStop::isValid($parentCxt, "\n", $this);
             }
             
             throw new SyntaxError("[015] HTML file ends without Tplus closing tag `]`");
@@ -811,7 +829,6 @@ class Expression {
             return false;
         }
 
-
         if ($afterCx) {
             // Ternary expressions (a ? b : c) require two-step termination:
             // 1st: when inner expression `c` finishes,
@@ -827,6 +844,9 @@ class Expression {
     private function nextToken() {
         foreach (Token::GROUPS as $tokenGroup => $tokenNames) {
             foreach ($tokenNames as $tokenName => $pattern) {
+                if ($tokenGroup === Token::SPACE && Statement::$leftTag === '') {
+                    $pattern = '[ \t]+';
+                }
                 if (preg_match('#^('.$pattern.')#s', Scripter::$userCode, $matches)) {
                     Scripter::consumeUserCode($matches[0]);
                     return ['group' => $tokenGroup, 'name' => $tokenName, 'value' => $matches[0]];
