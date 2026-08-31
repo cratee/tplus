@@ -195,7 +195,10 @@ class Scripter {
                     $resultScript .= $htmlLeftCmnt . $leftTag . $leftNl . /*$escape.*/$command;
 
                 } else if ($leftTag) {
-                    $resultScript = preg_replace('/\n[ \t]+$/', "\n", $resultScript) . $statement;
+                    if (preg_match('/\n[ \t]+$/', $textBeforeTplusCode)) {
+                        $resultScript = preg_replace('/\n[ \t]+$/', "\n", $resultScript);
+                    }
+                    $resultScript .= $statement;
                     
                 } else if ($leftNl) {
                     $resultScript .= "\n" . $statement;
