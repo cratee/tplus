@@ -158,6 +158,8 @@ class Scripter {
                     = Tfz::findOutside();
             }
 
+            // $leftTag and $leftNl are mutually exclusive.
+
             $resultScript .= $textBeforeTplusCode;
             self::consumeUserCode($consumedText);
 
@@ -191,8 +193,13 @@ class Scripter {
                 if (false === $statement) {
                     // [:][/] outside of @ ? block.
                     $resultScript .= $htmlLeftCmnt . $leftTag . $leftNl . /*$escape.*/$command;
-                } else {
-                    $resultScript .= ($leftNl ? "\n" : '') . $statement;
+
+                } else if ($leftTag) {
+                    $resultScript = preg_replace('/\n[ \t]+$/', "\n", $resultScript) . $statement;
+                    
+                } else if ($leftNl) {
+                    $resultScript .= "\n" . $statement;
+
                 }
             }            
         }
