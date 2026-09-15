@@ -171,15 +171,14 @@ class Error {
 
         $message = nl2br($message, false);
 
-        $typeClass = substr($type,0,2)==='E_' ? 'tplus-legacy' : 'tplus-throw';
+        $typeClass = substr($type,0,2)==='E_' ? 'tplus-error-legacy' : 'tplus-error-throw';
 
         if ( ! self::$count) {
             self::$count++;
 ?>
-
 <style>
  
-.tplus {
+.tplus-error {
     display: grid;
     grid-template-columns: 70px 1fr;
     gap: 3px;
@@ -189,51 +188,46 @@ class Error {
     padding:3px;
     margin:6px 3px;
     border-radius:3px;
-  }
-.tplus > div {
-    padding:3px 7px;
 }
-.tplus > div:first-child { /* title */
+.tplus-error > div {
     grid-column: span 2;
     font:bold 13px tahoma,verdana;
     padding:3px 3px;
 }
-.tplus > div:nth-child(even) { /* left column */
+.tplus-error > dl { display: contents; }
+.tplus-error dt {
     text-align:right;
     padding: 3px 3px;
 }
-.tplus > div:nth-child(even) + div {  /* right column */
+.tplus-error dd {
+    margin:0;
+    padding:3px 7px;
     border-radius:2px;
     background:#f2f2f2;
 }
-.tplus > div:nth-child(3) > span {
+.tplus-error dd > span {
     font-weight:bold;
     background:#fff;
-    padding:0px 3px;border-radius:2px;
+    padding:0px 3px;
+    border-radius:2px;
 }
-.tplus-legacy {
-    color:#0a3;
-}
-.tplus-throw {
-    color:#e33;
-}
-
+.tplus-error-legacy { color:#0a3; }
+.tplus-error-throw { color:#e33; }
 </style>
 
 <?php
         }
-
 ?>
-<div class="tplus">
-    <div><span><?=$title?></span></div>
-    <div>Type</div><div><span class="<?=$typeClass?>"><?=$type?></span></div>
-    <div>File</div><div><?=$file?></div>
-    <div>Line</div><div><?=$line?></div>
-    <div>Code</div><div><?=$code?></div>
-    <div>Message</div><div><?=$message?></div>
+<div class="tplus-error">
+    <div><?=$title?></div>
+    <dl>
+        <dt>Type</dt><dd><span class="<?=$typeClass?>"><?=$type?></span></dd>
+        <dt>File</dt><dd><?=$file?></dd>
+        <dt>Line</dt><dd><?=$line?></dd>
+        <dt>Code</dt><dd><?=$code?></dd>
+        <dt>Message</dt><dd><?=$message?></dd>
+    </dl>
 </div>
-
-
 <?php 
     }
 }

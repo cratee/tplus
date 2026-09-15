@@ -22,7 +22,7 @@ class Tpl {
 			 * 		false: skip template file check and use compiled script file only.
 			 * 
 			 * 		TIP: You can use your own Logic for environment detection.
-			 * 		e.g. 'ScriptCheck' => $GLOBALS['server_mode']=='development' ? true : false;
+			 * 		e.g. 'ScriptCheck' => ini_get('display_errors'), 
 			 */
 			'ScriptCheck' => true,
 
@@ -32,7 +32,7 @@ class Tpl {
 			 * 		This suppreses E_NOTICE (PHP 7.x) or E_WARNING (PHP 8.x).
 			 */
 			'AssignCheck' => true
-		], static::$injectedConfig);
+		], static::$injectedConfig[static::class] ?? []);
 	}
 
 	protected static $injectedConfig = [];
@@ -40,12 +40,15 @@ class Tpl {
 		return static::config();
 	}
 	public static function setConfig(array $config) {
-		static::$injectedConfig = array_merge(static::$injectedConfig, $config);
+		$class = static::class;
+		static::$injectedConfig[$class] = array_merge(
+			static::$injectedConfig[$class] ?? [], 
+			$config
+		);
 	}
 	public static function resetConfig() {
-		static::$injectedConfig = [];
+		unset(static::$injectedConfig[static::class]);
 	}
-
 	public static function get($path, $data=[]) {
 		$tplus = self::_();
 		$tplus->assign($data);
@@ -56,7 +59,8 @@ class Tpl {
 	}
 }
 
-class TplWrapper extends TplusWrapper {
+class TplWrapper  {
+	use TplusWrapper;
 
 	protected $x;
 
@@ -77,7 +81,8 @@ class TplWrapper extends TplusWrapper {
 	}
 }
 
-class TplLoopHelper extends TplusLoopHelper {
+class TplLoopHelper {
+	use TplusLoopHelper;
 
 	protected $i, $s, $k, $v;
 

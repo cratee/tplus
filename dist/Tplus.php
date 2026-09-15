@@ -8,13 +8,13 @@ class Tplus {
     private $data=[];
     private $phpReport;
     private $scripted = false;
+    private $config;
 
-    private static $config;
     private static $renderDepth=0;
     private static $isShutdownRegistered = false;
 
     public function __construct($config) {
-        self::$config = $config;
+        $this->config = $config;
     }
 
 
@@ -91,10 +91,10 @@ class Tplus {
     private function getScriptPath($path) {
 
         $path       = ltrim(str_replace('\\', '/', $path), '/');
-        $htmlPath   = rtrim(str_replace('\\', '/', self::$config['HtmlRoot']), '/') . '/' . $path;
-        $scriptPath = rtrim(str_replace('\\', '/', self::$config['HtmlScriptRoot']), '/') . '/' . $path . '.php';
+        $htmlPath   = rtrim(str_replace('\\', '/', $this->config['HtmlRoot']), '/') . '/' . $path;
+        $scriptPath = rtrim(str_replace('\\', '/', $this->config['HtmlScriptRoot']), '/') . '/' . $path . '.php';
 
-        if (self::$config['ScriptCheck']) {
+        if ($this->config['ScriptCheck']) {
             if (!is_file($htmlPath)) {
                 $this->die("Tpl config ['ScriptCheck' => true] but Tplus cannot find HTML file: <b style=\"color:#d00\">{$htmlPath}</b>");
             }
@@ -125,7 +125,7 @@ class Tplus {
             $scriptPath,
             self::SCRIPT_SIZE_PAD, 
             $this->scriptHeader($htmlPath), 
-            self::$config
+            $this->config
         );
 
         $this->scripted = true;
@@ -175,22 +175,22 @@ class Tplus {
     }
 
     private function modifyErrorReporting() {
-        if (self::shouldIgnoreMissing()) {
+        if ($this->shouldIgnoreMissing()) {
             $this->phpReport = error_reporting();
             $AssignErrorBit  = (PHP_VERSION_ID < 80000) ? E_NOTICE : E_WARNING;
             error_reporting($this->phpReport & ~$AssignErrorBit);
         }
     }
     private function restoreErrorReporting() {
-        if (self::shouldIgnoreMissing()) {
+        if ($this->shouldIgnoreMissing()) {
             error_reporting($this->phpReport);
         }
     }
 
-    private static function shouldIgnoreMissing() {
-        return isset(self::$config['AssignCheck']) and self::$config['AssignCheck']==false;
+    private function shouldIgnoreMissing() {
+        return isset($this->config['AssignCheck']) and $this->config['AssignCheck']==false;
     }
-    private static function runChain($var, $chain) {
+    private function runChain($var, $chain) {
         if (empty($chain)) {
             return $var;
         }
@@ -199,7 +199,7 @@ class Tplus {
         foreach ($chain as $i => $name) {
             if (is_array($var)) {
                 if (!array_key_exists($name, $var)) {
-                    self::trigger("Index `{$name}` not found in array.");
+                    $this->trigger("Index `{$name}` not found in array.");
                     return null;
                 }
                 $var = $var[$name];
@@ -208,44 +208,43 @@ class Tplus {
                 try {
                     $var = $var->$name;
                 } catch (\Throwable $e) {
-                    self::trigger("Property `{$name}` not found in object of class " . get_class($var));
+                    $this->trigger("Property `{$name}` not found in object of class " . get_class($var));
                     return null;
                 }
                 
             } else if (is_null($var)) {
-                self::trigger("Cannot access key `{$name}` on a null value.");
+                $this->trigger("Cannot access key `{$name}` on a null value.");
                 return null;
 
             } else {
                 if ($i !== $lastIndex) {
-                    self::trigger("Cannot access key `{$name}` on `{$var}`");
+                    $this->trigger("Cannot access key `{$name}` on `{$var}`");
                     return null;
                 }
             }
         }
         return $var;
     }
-    private static function trigger($message) {
+    private function trigger($message) {
         if (!self::shouldIgnoreMissing()) {
             trigger_error($message, E_USER_WARNING);
         }
     }
 }
 
+trait TplusWrapper {
+        
+    static protected $instances = [];
 
-abstract class TplusWrapper {
-    
-    static protected $instance;
-
-    final public static function o($x) {
+    final public static function o($x, $depth = 0) {
         if (is_object($x)) {
             return $x;
         }
-        if (empty(static::$instance)) {
-            static::$instance = new static;
+        if (empty(static::$instances[$depth])) {
+            static::$instances[$depth] = new static;
         }
-        static::$instance->x = $x;
-        return static::$instance;
+        static::$instances[$depth]->x = $x;
+        return static::$instances[$depth];
     }
 
     public function esc() {
@@ -292,18 +291,18 @@ abstract class TplusWrapper {
 }
 
 
-abstract class TplusLoopHelper {
+trait TplusLoopHelper {
 
-    static protected $instance;
+    static protected $instances = [];
 
-    final public static function o($i, $s, $k, $v) {
-        if (empty(static::$instance)) {
-            static::$instance = new static;
+    final public static function o($i, $s, $k, $v, $depth = 0) {
+        if (empty(static::$instances[$depth])) {
+            static::$instances[$depth] = new static;
         }
-        static::$instance->i = $i;
-        static::$instance->s = $s;
-        static::$instance->k = $k;
-        static::$instance->v = $v;
-        return static::$instance;
+        static::$instances[$depth]->i = $i;
+        static::$instances[$depth]->s = $s;
+        static::$instances[$depth]->k = $k;
+        static::$instances[$depth]->v = $v;
+        return static::$instances[$depth];
     }
 }

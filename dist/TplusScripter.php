@@ -264,10 +264,10 @@ class Tfz {
     public static function parseTag($tfzTag, $opened) {
         if (($pos = strpos($tfzTag, '\\')) !== false) {
             return substr_replace($tfzTag, '', $pos, 1);
-        } else {
-            self::$opened = $opened;
-            return '';          //  return $isFirstLine ? "\n" : '';  
         }
+
+        self::$opened = $opened;
+        return '';
     }
     public static function findOutside() {
         $pattern = 
@@ -347,6 +347,7 @@ class Tfz {
         return [Scripter::$userCode, Scripter::$userCode, '', '', '', '', '', ''];
     }
 }
+
 class SyntaxError extends \Error {}
 class FatalError extends \Error {}
 class ResourceNotFound extends \Error {}
@@ -375,8 +376,6 @@ class Stack {
         return array_pop($this->items);
     }
 }
-
-
 
 class Statement {
     /**
@@ -452,7 +451,7 @@ class Statement {
     }
 
     private static function newLine() {
-        return (substr(Scripter::$userCode, 0, 1) === "\n")
+        return (preg_match('/^[ \t]*\n/', Scripter::$userCode))
             ? ""
             : "\n";
     }
@@ -578,7 +577,7 @@ class Token {
         ],
         self::OPERAND => [
             'Name'      =>'[\p{L}_][\p{L}\p{N}_]*',
-            'Number'    =>'(?:\d+(?:\.\d*)?)(?:[eE][+\-]\d+)?',
+            'Number'    =>'(?:\d+(?:\.\d*)?)(?:[eE][+\-]?\d+)?',
             'Quoted'    =>'(?:"(?:\\\\.|[^"])*")|(?:\'(?:\\\\.|[^\'])*\')',
         ],
         self::OPERATOR => [
@@ -753,12 +752,17 @@ class Expression {
     private $scriptPieces = [];
     private $wrapperStartIndex = -1;
     private $wrapperTrigger = null;
+    private $depth = 0;
 
-    public static function script($parentCxt = 0) {
+    public static function script($parentCxt=0, $depth=0) {
         
         $expression = new Expression();
+        $expression->depth = $depth;
         $expression->parse($parentCxt);
         return $expression->assembleScriptPieces();
+    }
+    public function depth() {
+        return $this->depth;
     }
                     
     public function preventEmptyExpression($stopCode) {
@@ -804,7 +808,7 @@ class Expression {
             if ($currToken['group'] & Token::CXT) {
 
                 $this->cxt = Cxt::get($prevToken, $currToken, $this->cxt);
-                $this->scriptPieces[] = self::script($this->cxt);
+                $this->scriptPieces[] = self::script($this->cxt, $this->depth+1);
                 $afterCx = true;
             }
 
@@ -851,7 +855,7 @@ class Expression {
                 if ($tokenGroup === Token::SPACE && Statement::$leftTag === '') {
                     $pattern = '[ \t]+';
                 }
-                if (preg_match('#^('.$pattern.')#s', Scripter::$userCode, $matches)) {
+                if (preg_match('#^('.$pattern.')#su', Scripter::$userCode, $matches)) {
                     Scripter::consumeUserCode($matches[0]);
                     return ['group' => $tokenGroup, 'name' => $tokenName, 'value' => $matches[0]];
                 }
@@ -1024,7 +1028,8 @@ class Expression {
             NameDotChain::init();
             $this->wrapperTrigger = null;                
             $this->insertWrapper();
-            return ')->'.$name;
+            //return ')->'.$name;
+            return ", {$this->depth})->{$name}";
         }
         
         if ($trueFalseNull = NameDotChain::addName($name)) {
@@ -1140,7 +1145,8 @@ class NameDotChain {
     public static function wrapIfNeeded($script, $method, $mustBeWrapper = false) {
         if (Checker::isDefinedWrapper($method)) {
             self::$expression->insertWrapper();
-            return $script . ')->' . $method;
+            //return $script . ')->' . $method;
+            return $script.', '.self::$expression->depth().')->'.$method;
         }
         if ($mustBeWrapper) {
             throw new ResourceNotFound("[023] Wrapper method `{$method}()` is not defined in class `".Scripter::$wrapper."`.");
@@ -1164,7 +1170,7 @@ class LoopMember {
         }
 
         if ($names[0] === 'h') {
-            return self::parseH($tokens, $names, $loopDepth);
+            return self::parseH($tokens, $names, $loopDepth, $expression);
         }
 
         return self::parseV($names, $loopDepth);
@@ -1183,12 +1189,14 @@ class LoopMember {
 
             $expression->insertWrapper();
 
-            return Statement::loopName($loopDepth, $names[0]).')->'.$names[1];
+            //return Statement::loopName($loopDepth, $names[0]).')->'.$names[1];
+
+            return Statement::loopName($loopDepth, $names[0]).', '.$expression->depth().')->'.$names[1];
         }
         // NOTE: i,s and k cannot be array and so cannot have element.
         throw new SyntaxError('[030] Unexpected "'.implode('', $tokens).'"');
     }
-    private static function parseH($tokens, $names, $loopDepth) {
+    private static function parseH($tokens, $names, $loopDepth, $expression) {
         if (! (count($names) === 2 and Checker::isFunc())) {
             throw new SyntaxError('[033] Unexpected '.implode('', $tokens));
         }
@@ -1198,7 +1206,8 @@ class LoopMember {
         }
         ['a'=>$a, 'i'=>$i, 's'=>$s, 'k'=>$k, 'v'=>$v] = Statement::loopNames($loopDepth);
         
-        return Scripter::$loopHelper.'::o('.$i.','.$s.','.$k.','.$v.')->'.$names[1];
+        //return Scripter::$loopHelper.'::o('.$i.','.$s.','.$k.','.$v.')->'.$names[1];
+        return Scripter::$loopHelper.'::o('.$i.','.$s.','.$k.','.$v.','.$expression->depth().')->'.$names[1];
     }
     private static function parseV($names, $loopDepth) {
         if ($names[0] === 'v') {
@@ -1211,7 +1220,7 @@ class LoopMember {
 
         if (!empty($names)) {
             $pathCode = "['" . implode("','", $names) . "']";
-            $script = "Tplus::runChain({$script}, {$pathCode})";
+            $script = "\$this->runChain({$script}, {$pathCode})";
         }
 
         return $method
@@ -1256,7 +1265,7 @@ class AutoGlobals {
 
         if (!empty($names)) {
             $pathCode = "['" . implode("','", $names) . "']";
-            $script = "Tplus::runChain({$script}, {$pathCode})";
+            $script = "\$this->runChain({$script}, {$pathCode})";
         }
         return $method
             ? NameDotChain::wrapIfNeeded($script, $method, true)
@@ -1359,7 +1368,7 @@ class DefaultChain {
         } else {
             $firstKey = array_shift($names);
             $pathCode = "['" . implode("','", $names) . "']";
-            $script = "Tplus::runChain(\$V['{$firstKey}'], {$pathCode})";
+            $script = "\$this->runChain(\$V['{$firstKey}'], {$pathCode})";
         }
         return ['type'=>'dynamic', 'script'=>$script, 'method'=>$method];
 
