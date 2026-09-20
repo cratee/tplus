@@ -17,7 +17,7 @@
 		background: #49c; /* E_WARNING에 쓰인 그 매력적인 블루 */
 		color: #def;
 		padding: 3px 6px;
-		min-width:45px;
+		min-width:70px;
 		text-align: left;
 		border-radius: 3px;
 		display: inline-block;
@@ -29,7 +29,7 @@
 		padding: 3px 3px;
 		border-radius: 3px;
 		margin-left: 5px;
-		width:15px;
+		min-width:30px;
 		display: inline-block;
 		vertical-align: middle;
 		text-align:center
@@ -41,7 +41,7 @@
 		padding: 3px 3px;
 		border-radius: 3px;
 		margin-left: 5px;
-		width: 15px;
+		min-width: 30px;
 		display: inline-block;
 		vertical-align: middle;
 		text-align: center;
@@ -191,12 +191,12 @@ document.addEventListener("DOMContentLoaded", function() {
 [\=bar()]
 	</td>
 	<td>
-	<!-- [=foo] --> <br/>
- 	[=bar()]
+<!-- [=foo] --> <br/>
+[=bar()]
 	</td>
 	<td>
-	hello~ <br/> 
-	good good
+hello~ <br/>
+good good
 	</td>
 </tr>
 
@@ -238,8 +238,7 @@ document.addEventListener("DOMContentLoaded", function() {
 	&lt;ul&gt;
 	[\@ .cities]
 		&lt;li&gt;
-		[\=..name] [\=..pop] million
-		([\= ..pop / .pop * 100]%)
+		[\=..name] [\=..pop] million ([\= ..pop / .pop * 100]%)
 		&lt;/li&gt;
 	[\/]
 	&lt;/ul&gt;
@@ -291,6 +290,72 @@ Male 0.15 million (37.5%)
 </tr>
 
 <tr>
+	<td><span>9.2.1.(Tfz)</span></td>
+
+	<td>
+\[[[
+&lt;ul&gt;
+@ countries
+	&lt;li&gt;
+	[\=.name] [\=.pop] million
+	&lt;ul&gt;
+	@ .cities
+		&lt;li&gt;
+		[\=..name] [\=..pop] million ([\= ..pop / .pop * 100]%)
+		&lt;/li&gt;
+	/
+	&lt;/ul&gt;
+	&lt;/li&gt;
+/
+&lt;/ul&gt;
+]]]
+	</td>
+
+	<td>
+		<ul>
+[[[
+@ countries
+			<li>
+	[=.name] [=.pop] million
+				<ul>
+	@ .cities
+				<li>
+		[=..name] [=..pop] million ([= ..pop / .pop * 100]%)
+				</li>
+	/
+				</ul>
+			</li>
+/
+]]]
+		</ul>
+	</td>
+	
+	<td>
+		<ul>
+			<li>
+South Korea 50 million
+				<ul>
+				<li>
+Seoul 10 million (20%)
+				</li>
+				<li>
+Sejong 0.3 million (0.6%)
+				</li>
+				</ul>
+			</li>
+			<li>
+Republic of Maldives 0.4 million
+				<ul>
+				<li>
+Male 0.15 million (37.5%)
+				</li>
+				</ul>
+			</li>
+		</ul>
+	</td>
+</tr>
+
+<tr>
 	<td><span>9.2.2.</span></td>
 	<td>
 [\@ foo1]
@@ -299,26 +364,50 @@ Male 0.15 million (37.5%)
 	[\/]
 [\/]
 	</td>
-	<td> 
-	[@ foo1]
-		[@ bar1]  
-			[=.v] x [=..v] = [=.v *..v] <br/>
-		[/]
+	<td>
+[@ foo1]
+	[@ bar1]
+		[=.v] x [=..v] = [=.v *..v] <br/>
 	[/]
+[/]
 	</td>
 	<td>
-					
-		1 x 3 = 3 <br/>
-				
-		1 x 4 = 4 <br/>
-			
-		1 x 5 = 5 <br/>
-						
-		2 x 3 = 6 <br/>
-			
-		2 x 4 = 8 <br/>
-			
-		2 x 5 = 10 <br/>
+1 x 3 = 3 <br/>
+1 x 4 = 4 <br/>
+1 x 5 = 5 <br/>
+2 x 3 = 6 <br/>
+2 x 4 = 8 <br/>
+2 x 5 = 10 <br/>
+	</td>
+</tr>
+
+<tr>
+	<td><span>9.2.2.(Tfz)</span></td>
+	<td>
+\[[[
+@ foo1
+	@ bar1
+		[\=.v] x [\=..v] = [\=.v *..v] &lt;br/&gt;
+	/
+/
+]]]
+	</td>
+	<td>
+[[[	
+@ foo1
+	@ bar1
+		[=.v] x [=..v] = [=.v *..v] <br/>
+	/
+/
+]]]
+	</td>
+	<td>
+1 x 3 = 3 <br/>
+1 x 4 = 4 <br/>
+1 x 5 = 5 <br/>
+2 x 3 = 6 <br/>
+2 x 4 = 8 <br/>
+2 x 5 = 10 <br/>
 	</td>
 </tr>
 
@@ -713,6 +802,52 @@ Kitty, 25, running
 		blue
 	</td>
 </tr>
+
+<tr>
+	<td><span>20.(Tfz)</span></td>
+	<td>
+\[[[
+@ {}
+	=.v
+:
+	foo empty
+/
+&lt;br/&gt;	
+
+? fruit == 'apple' || fruit == 'cherry'
+	red
+: fruit == 'blueberry' || pants=='jeans'
+	blue
+:
+	unkown
+/
+]]]
+	</td>
+
+	<td>
+[[[
+@ {}
+	=.v
+:
+	foo empty
+/
+<br/>
+? fruit == 'apple' || fruit == 'cherry'
+	red
+: fruit == 'blueberry' || pants=='jeans'
+	blue
+:
+	unkown
+/
+]]]
+	</td>
+	<td>
+		foo empty
+		<br/>
+		blue
+	</td>
+</tr>
+
 
 <tr>
 	<td><span>21.</span></td>

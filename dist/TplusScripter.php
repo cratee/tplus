@@ -43,6 +43,8 @@ class Scripter {
     
     public static function script($htmlPath, $scriptPath, $sizePad, $header, $config) {
     
+        Tfz::$opened = false;
+
         self::$wrapper = '\\'.(empty($config['Wrapper']) ? 'TplWrapper' : $config['Wrapper']);
         self::$loopHelper = '\\'.(empty($config['LoopHelper']) ? 'TplLoopHelper' : $config['LoopHelper']);
 
